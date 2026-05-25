@@ -8,6 +8,7 @@ Usage:
 """
 
 import os
+import io
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -151,7 +152,11 @@ def main():
                     name.replace(".png", ".pt").replace(".jpg", ".pt"),
                 )
                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                torch.save(embeds[i].half().cpu(), out_path)
+                # Save via buffer to avoid zipfile bug on external drives
+                buf = io.BytesIO()
+                torch.save(embeds[i].half().cpu(), buf)
+                with open(out_path, "wb") as f:
+                    f.write(buf.getvalue())
 
     print(f"Done! Embeddings saved to: {EMBED_OUT_DIR}")
 
