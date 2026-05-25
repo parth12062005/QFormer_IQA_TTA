@@ -141,7 +141,8 @@ def collate_fn(batch):
 #####  3) DEVICE
 ##### ----------------- ####
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("device:", device)
+num_gpus = torch.cuda.device_count()
+print(f"device: {device}, GPUs available: {num_gpus}")
 
 
 ##### ----------------- ####
@@ -247,12 +248,23 @@ for p in qformer.model.Qformer.parameters():
 for p in regressor.parameters():
     p.requires_grad = True
 
+# Wrap models with DataParallel to use both GPUs
+if num_gpus > 1:
+    print(f"Using DataParallel across {num_gpus} GPUs")
+    qformer = nn.DataParallel(qformer)
+    regressor = nn.DataParallel(regressor)
+
 ##### ----------------- ####
 #####  6) LOSSES + OPTIM
 ##### ----------------- ####
 reg_criterion = nn.MSELoss()
+
+# Access underlying module when using DataParallel
+qformer_module = qformer.module if isinstance(qformer, nn.DataParallel) else qformer
+regressor_module = regressor.module if isinstance(regressor, nn.DataParallel) else regressor
+
 optimizer = torch.optim.Adam(
-    [p for p in qformer.model.parameters() if p.requires_grad] + list(regressor.parameters()),
+    [p for p in qformer_module.model.parameters() if p.requires_grad] + list(regressor_module.parameters()),
     lr=1e-4
 )
 
@@ -379,13 +391,14 @@ def main():
     best_srcc, best_test_srcc = -1.0, -1.0
     test_out_csv = "./results/evalmi_baseline_qf_test_ver2.csv"
 
-    for epoch in range(15):
+    num_epochs = 15
+    for epoch in tqdm(range(num_epochs), desc="Epochs", total=num_epochs):
         train_loss = train_one_epoch(train_dataloader)
         val_srcc,_= evaluate_and_save_df(val_dataloader, output_csv_path=None, desc_tag="Evaluating on evalmi validation")
 
-        print("epoch--", epoch)
-        print("train loss--", train_loss)
-        print("val evaluated ,Val srcc--", val_srcc)
+        print(f"\nepoch-- {epoch}")
+        print(f"train loss-- {train_loss:.6f}")
+        print(f"val evaluated, Val srcc-- {val_srcc:.6f}")
 
         if val_srcc > best_srcc:
             best_srcc = val_srcc
@@ -396,9 +409,9 @@ def main():
 
             torch.save(
                 {
-                    "qformer.Qformer": qformer.model.Qformer.state_dict(),
-                    "query_tokens": qformer.model.query_tokens.detach().cpu(),
-                    "regressor": regressor.state_dict(),
+                    "qformer.Qformer": qformer_module.model.Qformer.state_dict(),
+                    "query_tokens": qformer_module.model.query_tokens.detach().cpu(),
+                    "regressor": regressor_module.state_dict(),
                 },
                 checkpoint_path,
             )
