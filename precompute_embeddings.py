@@ -29,7 +29,7 @@ CSV_PATHS = [
     "../EvalMi-50K/evalmi_test.csv",
 ]
 EMBED_OUT_DIR = "../EvalMi-50K/embeddings"
-BATCH_SIZE = 64  # larger batch since we're only doing inference
+BATCH_SIZE = 100  # larger batch since we're only doing inference
 NUM_WORKERS = 4
 
 
