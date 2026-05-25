@@ -350,34 +350,34 @@ def evaluate_and_save_df(dataloader, output_csv_path=None, desc_tag="Evaluating"
 def main():
     print("PRETRAINING OF BASELINE QFORMER ON EVALMI DATABASE")
     train_dataset = QFormerQualityDataset(
-        csv_path="/home/rajivs/anatapmitra/anatap_data/generated_descriptions_PT1/Evalmi_new/evalmi_train_full_gen_responses_PT1.csv",
-        img_root="/home/rajivs/anatapmitra/anatap_data/anatap_1/public_datasets/EvalMi-50K",
+        csv_path="../EvalMi-50K/evalmi_train.csv",
+        img_root="../EvalMi-50K",
     )
     train_dataloader = DataLoader(
         train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn
     )
 
     val_dataset = QFormerQualityDataset(
-        csv_path="/home/rajivs/anatapmitra/anatap_data/generated_descriptions_PT1/Evalmi_new/evalmi_val_full_gen_responses_PT1.csv",
-        img_root="/home/rajivs/anatapmitra/anatap_data/anatap_1/public_datasets/EvalMi-50K",
+        csv_path="../EvalMi-50K/evalmi_val.csv",
+        img_root="../EvalMi-50K",
     )
     val_dataloader = DataLoader(
         val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn
     )
 
     test_dataset = QFormerQualityDataset(
-        csv_path="/home/rajivs/anatapmitra/anatap_data/generated_descriptions_PT1/Evalmi_new/evalmi_test_full_gen_responses_PT1.csv",
-        img_root="/home/rajivs/anatapmitra/anatap_data/anatap_1/public_datasets/EvalMi-50K",
+        csv_path="../EvalMi-50K/evalmi_test.csv",
+        img_root="../EvalMi-50K",
     )
     test_dataloader = DataLoader(
         test_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn
     )
 
-    checkpoint_path = "/home/rajivs/anatapmitra/anatap_data/Qformer_experiments/new_pretraining/evalmi_baseline_qf_ver2.pth"
+    checkpoint_path = "./checkpoints/evalmi_baseline_qf_ver2.pth"
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
     best_srcc, best_test_srcc = -1.0, -1.0
-    test_out_csv = "/home/rajivs/anatapmitra/anatap_data/Qformer_experiments/new_pretraining/evalmi_baseline_qf_test_ver2.csv"
+    test_out_csv = "./results/evalmi_baseline_qf_test_ver2.csv"
 
     for epoch in range(15):
         train_loss = train_one_epoch(train_dataloader)
