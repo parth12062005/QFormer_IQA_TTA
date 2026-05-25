@@ -28,7 +28,7 @@ CSV_PATHS = [
     "../EvalMi-50K/evalmi_val.csv",
     "../EvalMi-50K/evalmi_test.csv",
 ]
-EMBED_OUT_DIR = "../EvalMi-50K/embeddings"
+EMBED_OUT_DIR = "/media/parth/balance/parth/dataset/embeddings"
 BATCH_SIZE = 100  # larger batch since we're only doing inference
 NUM_WORKERS = 4
 
