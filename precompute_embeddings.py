@@ -29,8 +29,8 @@ CSV_PATHS = [
     "../EvalMi-50K/evalmi_test.csv",
 ]
 EMBED_OUT_DIR = "/media/parth/balance/parth/dataset/embeddings"
-BATCH_SIZE = 100  # larger batch since we're only doing inference
-NUM_WORKERS = 4
+BATCH_SIZE = 200  # ~100 per GPU, fits in ~8GB free VRAM each
+NUM_WORKERS = 8
 
 
 ##### ------------- ####
