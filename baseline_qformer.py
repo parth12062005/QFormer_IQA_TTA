@@ -363,7 +363,7 @@ def main():
     print("PRETRAINING OF BASELINE QFORMER ON EVALMI DATABASE")
     train_dataset = QFormerQualityDataset(
         csv_path="../EvalMi-50K/evalmi_train.csv",
-        img_root="../EvalMi-50K",
+        img_root="../EvalMi-50K/AIGI2025",
     )
     train_dataloader = DataLoader(
         train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn
@@ -371,7 +371,7 @@ def main():
 
     val_dataset = QFormerQualityDataset(
         csv_path="../EvalMi-50K/evalmi_val.csv",
-        img_root="../EvalMi-50K",
+        img_root="../EvalMi-50K/AIGI2025",
     )
     val_dataloader = DataLoader(
         val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn
@@ -379,7 +379,7 @@ def main():
 
     test_dataset = QFormerQualityDataset(
         csv_path="../EvalMi-50K/evalmi_test.csv",
-        img_root="../EvalMi-50K",
+        img_root="../EvalMi-50K/AIGI2025",
     )
     test_dataloader = DataLoader(
         test_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn
