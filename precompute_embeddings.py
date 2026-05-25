@@ -28,7 +28,7 @@ CSV_PATHS = [
     "../EvalMi-50K/evalmi_val.csv",
     "../EvalMi-50K/evalmi_test.csv",
 ]
-EMBED_OUT_DIR = "/media/parth/balance/parth/dataset/embeddings"
+EMBED_OUT_DIR = "/home/parth/dataset/embeddings"
 BATCH_SIZE = 500   # ~100 per GPU, fits in ~8GB free VRAM each
 NUM_WORKERS = 8
 
