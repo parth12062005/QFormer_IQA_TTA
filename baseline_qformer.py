@@ -97,12 +97,12 @@ class QFormerEmbeddingDataset(Dataset):
         row = self.df.iloc[idx]
         img_name = str(row[IMG_COL])
 
-        # Load precomputed embedding: e.g. "ali_flux_schnell/001.png" -> "ali_flux_schnell/001.pt"
+        # Load precomputed embedding: e.g. "ali_flux_schnell/001.png" -> "ali_flux_schnell/001.npz"
         embed_path = os.path.join(
             self.embed_root,
-            img_name.replace(".png", ".pt").replace(".jpg", ".pt"),
+            img_name.replace(".png", ".npz").replace(".jpg", ".npz"),
         )
-        image_embeds = torch.load(embed_path, weights_only=True).float()  # (num_patches, embed_dim)
+        image_embeds = torch.from_numpy(np.load(embed_path)["embed"]).float()  # (num_patches, embed_dim)
 
         prompt = str(row[PROMPT_COL])
         desc   = str(row[DESC_COL])

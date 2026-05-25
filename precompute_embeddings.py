@@ -8,7 +8,7 @@ Usage:
 """
 
 import os
-import io
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -95,7 +95,7 @@ def main():
     # Filter out already-computed embeddings
     remaining = []
     for name in all_image_names:
-        out_path = os.path.join(EMBED_OUT_DIR, name.replace(".png", ".pt").replace(".jpg", ".pt"))
+        out_path = os.path.join(EMBED_OUT_DIR, name.replace(".png", ".npz").replace(".jpg", ".npz"))
         if not os.path.exists(out_path):
             remaining.append(name)
 
@@ -145,28 +145,25 @@ def main():
             images = images.to(device, non_blocking=True)
             embeds = vit(images)  # (B, num_patches, embed_dim)
 
-            # Save each embedding individually as float16
+            # Save each embedding individually as compressed float16 numpy
             for i, name in enumerate(names):
                 out_path = os.path.join(
                     EMBED_OUT_DIR,
-                    name.replace(".png", ".pt").replace(".jpg", ".pt"),
+                    name.replace(".png", ".npz").replace(".jpg", ".npz"),
                 )
                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                # Save via buffer to avoid zipfile bug on external drives
-                buf = io.BytesIO()
-                torch.save(embeds[i].half().cpu(), buf)
-                with open(out_path, "wb") as f:
-                    f.write(buf.getvalue())
+                np.savez_compressed(out_path, embed=embeds[i].half().cpu().numpy())
 
     print(f"Done! Embeddings saved to: {EMBED_OUT_DIR}")
 
     # Print shape info for reference
     sample_path = os.path.join(
         EMBED_OUT_DIR,
-        remaining[0].replace(".png", ".pt").replace(".jpg", ".pt"),
+        remaining[0].replace(".png", ".npz").replace(".jpg", ".npz"),
     )
-    sample = torch.load(sample_path, weights_only=True)
+    sample = np.load(sample_path)["embed"]
     print(f"Embedding shape per image: {sample.shape} (dtype: {sample.dtype})")
+    print(f"File size: {os.path.getsize(sample_path) / 1024:.1f} KB")
 
 
 if __name__ == "__main__":
