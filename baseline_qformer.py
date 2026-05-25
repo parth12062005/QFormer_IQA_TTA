@@ -140,9 +140,9 @@ def collate_fn(batch):
 ##### ----------------- ####
 #####  3) DEVICE
 ##### ----------------- ####
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-num_gpus = torch.cuda.device_count()
-print(f"device: {device}, GPUs available: {num_gpus}")
+# Use GPU 1 (GPU 0 runs the display server)
+device = torch.device("cuda:1" if torch.cuda.device_count() > 1 else "cuda:0")
+print(f"device: {device}")
 
 
 ##### ----------------- ####
@@ -248,23 +248,12 @@ for p in qformer.model.Qformer.parameters():
 for p in regressor.parameters():
     p.requires_grad = True
 
-# Wrap models with DataParallel to use both GPUs
-if num_gpus > 1:
-    print(f"Using DataParallel across {num_gpus} GPUs")
-    qformer = nn.DataParallel(qformer)
-    regressor = nn.DataParallel(regressor)
-
 ##### ----------------- ####
 #####  6) LOSSES + OPTIM
 ##### ----------------- ####
 reg_criterion = nn.MSELoss()
-
-# Access underlying module when using DataParallel
-qformer_module = qformer.module if isinstance(qformer, nn.DataParallel) else qformer
-regressor_module = regressor.module if isinstance(regressor, nn.DataParallel) else regressor
-
 optimizer = torch.optim.Adam(
-    [p for p in qformer_module.model.parameters() if p.requires_grad] + list(regressor_module.parameters()),
+    [p for p in qformer.model.parameters() if p.requires_grad] + list(regressor.parameters()),
     lr=1e-4
 )
 
@@ -409,9 +398,9 @@ def main():
 
             torch.save(
                 {
-                    "qformer.Qformer": qformer_module.model.Qformer.state_dict(),
-                    "query_tokens": qformer_module.model.query_tokens.detach().cpu(),
-                    "regressor": regressor_module.state_dict(),
+                    "qformer.Qformer": qformer.model.Qformer.state_dict(),
+                    "query_tokens": qformer.model.query_tokens.detach().cpu(),
+                    "regressor": regressor.state_dict(),
                 },
                 checkpoint_path,
             )
