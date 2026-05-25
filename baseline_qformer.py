@@ -3,6 +3,7 @@
 #### script for FULL LABEL with baseline qformer where we only use mm pass only 
 #### - Supervised: regression (multimodal query tokens pooled -> MLP -> MOS)
 #### We save the predictions for test set only here .
+#### NOTE: Uses PRECOMPUTED ViT embeddings. Run precompute_embeddings.py first.
 
 ##### ----------------- ####
 #####  1) IMPORTS + UTILS
@@ -10,14 +11,12 @@
 import os
 import numpy as np
 import pandas as pd
-from PIL import Image 
 from tqdm import tqdm
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
 
 from lavis.models import load_model_and_preprocess
 
@@ -76,60 +75,55 @@ def spearmanr_numpy(x, y):
 
 
 ##### ----------------- ####
-#####  2) DATASET + COLLATE
+#####  2) DATASET + COLLATE (uses precomputed ViT embeddings)
 ##### ----------------- ####
 IMG_COL    = "image_name"
 PROMPT_COL = "prompt"
 DESC_COL   = "gen_answer"   # change if your csv uses a different name
 GT_COL     = "gt_score"
 
-class QFormerQualityDataset(Dataset):
-    def __init__(self, csv_path, img_root, image_tf=None):
-        self.df = pd.read_csv(csv_path)
-        self.img_root = img_root
+EMBED_ROOT = "../EvalMi-50K/embeddings"  # directory with precomputed .pt files
 
-        if image_tf is None:
-            self.image_tf = transforms.Compose([
-                transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC),
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=(0.48145466, 0.4578275, 0.40821073),
-                    std=(0.26862954, 0.26130258, 0.27577711),
-                ),
-            ])
-        else:
-            self.image_tf = image_tf
+class QFormerEmbeddingDataset(Dataset):
+    """Loads precomputed ViT embeddings instead of raw images."""
+    def __init__(self, csv_path, embed_root=EMBED_ROOT):
+        self.df = pd.read_csv(csv_path)
+        self.embed_root = embed_root
 
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
+        img_name = str(row[IMG_COL])
 
-        image_path = os.path.join(self.img_root, str(row[IMG_COL]))
-        image = Image.open(image_path).convert("RGB")
-        image = self.image_tf(image)  # (3,224,224)
+        # Load precomputed embedding: e.g. "ali_flux_schnell/001.png" -> "ali_flux_schnell/001.pt"
+        embed_path = os.path.join(
+            self.embed_root,
+            img_name.replace(".png", ".pt").replace(".jpg", ".pt"),
+        )
+        image_embeds = torch.load(embed_path, weights_only=True).float()  # (num_patches, embed_dim)
 
         prompt = str(row[PROMPT_COL])
         desc   = str(row[DESC_COL])
         gt     = torch.tensor(float(row[GT_COL]), dtype=torch.float32)
 
         return {
-            "image": image,
+            "image_embeds": image_embeds,
             "prompt": prompt,
             "description": desc,
-            "image_name": str(row[IMG_COL]),
+            "image_name": img_name,
             "gt_score": gt,
         }
 
 def collate_fn(batch):
-    images = torch.stack([b["image"] for b in batch], dim=0)
+    image_embeds = torch.stack([b["image_embeds"] for b in batch], dim=0)
     prompts = [b["prompt"] for b in batch]
     descs = [b["description"] for b in batch]
     image_names = [b["image_name"] for b in batch]
     gt_scores = torch.stack([b["gt_score"] for b in batch], dim=0)
     return {
-        "images": images,              # (B,3,224,224)
+        "image_embeds": image_embeds,  # (B, num_patches, embed_dim)
         "prompts": prompts,            # list[str]
         "descs": descs,                # list[str]
         "image_names": image_names,    # list[str]
@@ -169,6 +163,10 @@ class Regressor(nn.Module):
         return self.layer(x)
 
 class QformerWrapper(nn.Module):
+    """
+    Q-Former wrapper that takes PRECOMPUTED image embeddings instead of raw images.
+    No ViT encoder needed — only loads the Q-Former + query tokens.
+    """
     def __init__(self, device, is_eval=False):
         super().__init__()
         model, vis_proc, txt_proc = load_model_and_preprocess(
@@ -178,35 +176,35 @@ class QformerWrapper(nn.Module):
             device=device,
         )
         self.model = model.to(device)
-        self.device = device 
+        self.device = device
 
-    def forward(self, images, prompts, descs):
+        # Free ViT from GPU memory since we use precomputed embeddings
+        del self.model.visual_encoder
+        del self.model.ln_vision
+        torch.cuda.empty_cache()
+
+    def forward(self, image_embeds_frozen, prompts, descs):
         """
-        1 forward passes through SAME BLIP2-QFormer:
+        Takes precomputed frozen image embeddings and runs only the Q-Former.
 
-        (1) image-only query pass:
-            images -> (frozen ViT) -> image_embeds_frozen
+        Args:
+            image_embeds_frozen: (B, num_patches, embed_dim) - precomputed ViT output
+            prompts:             list[str]
+            descs:               list[str] (unused in baseline, kept for API compat)
 
-        (2) multimodal pass (for supervised regression):
-            (images + prompts) -> Qformer(multimodal) -> query token outputs -> mean pool -> mm_mean [B,768]
+        Returns:
+            mm_mean_embeds:      (B, 768)
         """
-        B = images.size(0)
-        images = images.to(self.device)
+        B = image_embeds_frozen.size(0)
+        image_embeds_frozen = image_embeds_frozen.to(self.device)
 
-        # -------------------------
-        # (0) IMAGE-EMBED COMPUTE
-        # -------------------------
-        with torch.no_grad():
-            with self.model.maybe_autocast():
-                image_embeds_frozen = self.model.ln_vision(self.model.visual_encoder(images))
-            image_embeds_frozen = image_embeds_frozen.float()
-            image_atts = torch.ones(
-                image_embeds_frozen.size()[:-1], dtype=torch.long, device=self.device
-            )
+        image_atts = torch.ones(
+            image_embeds_frozen.size()[:-1], dtype=torch.long, device=self.device
+        )
 
         query_tokens = self.model.query_tokens.expand(B, -1, -1)  # [B,32,768]
         # -------------------------
-        # (1) MULTIMODAL PASS (PROMPTS)
+        # MULTIMODAL PASS (PROMPTS)
         # -------------------------
         text_prompt = self.model.tokenizer(
             prompts, return_tensors="pt", padding=True, truncation=True
@@ -267,14 +265,14 @@ def train_one_epoch(dataloader):
 
     total_loss = 0.0
     for batch in tqdm(dataloader, total=len(dataloader), desc="Training qformer"):
-        images = batch["images"].to(device)
+        image_embeds = batch["image_embeds"].to(device)
         prompts = batch["prompts"]
         descs = batch["descs"]
         gt_scores = batch["gt_scores"].to(device)  # (B,)
 
         optimizer.zero_grad()
 
-        mm_mean_embeds = qformer(images, prompts, descs)
+        mm_mean_embeds = qformer(image_embeds, prompts, descs)
 
         pred = regressor(mm_mean_embeds).squeeze(-1)  # (B,)
         reg_loss = reg_criterion(pred, gt_scores)
@@ -304,13 +302,13 @@ def evaluate_and_save_df(dataloader, output_csv_path=None, desc_tag="Evaluating"
     gt_list = []
 
     for batch in tqdm(dataloader, total=len(dataloader), desc=desc_tag):
-        images = batch["images"].to(device, non_blocking=True)
+        image_embeds = batch["image_embeds"].to(device, non_blocking=True)
         image_names = batch["image_names"]
         prompts = batch["prompts"]
         descs = batch["descs"]
         gt_scores = batch["gt_scores"].to(device, non_blocking=True)  # (B,)
 
-        mm_mean_embeds = qformer(images, prompts, descs)
+        mm_mean_embeds = qformer(image_embeds, prompts, descs)
         pred = regressor(mm_mean_embeds).squeeze(-1)  # (B,)
 
         # accumulate for SRCC
@@ -349,29 +347,26 @@ def evaluate_and_save_df(dataloader, output_csv_path=None, desc_tag="Evaluating"
 #####  8) MAIN
 ##### ----------------- ####
 def main():
-    print("PRETRAINING OF BASELINE QFORMER ON EVALMI DATABASE")
-    train_dataset = QFormerQualityDataset(
+    print("PRETRAINING OF BASELINE QFORMER ON EVALMI DATABASE (using precomputed embeddings)")
+    train_dataset = QFormerEmbeddingDataset(
         csv_path="../EvalMi-50K/evalmi_train.csv",
-        img_root="../EvalMi-50K/AIGI2025",
     )
     train_dataloader = DataLoader(
-        train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn
+        train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
-    val_dataset = QFormerQualityDataset(
+    val_dataset = QFormerEmbeddingDataset(
         csv_path="../EvalMi-50K/evalmi_val.csv",
-        img_root="../EvalMi-50K/AIGI2025",
     )
     val_dataloader = DataLoader(
-        val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn
+        val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
-    test_dataset = QFormerQualityDataset(
+    test_dataset = QFormerEmbeddingDataset(
         csv_path="../EvalMi-50K/evalmi_test.csv",
-        img_root="../EvalMi-50K/AIGI2025",
     )
     test_dataloader = DataLoader(
-        test_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn
+        test_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
     checkpoint_path = "./checkpoints/evalmi_baseline_qf_ver2.pth"
