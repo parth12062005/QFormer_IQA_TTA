@@ -1,0 +1,1257 @@
+2025 IEEE International Conference on Multimedia and Expo (ICME) | 979-8-3315-9495-4/25/$31.00 ©2025 IEEE | DOI: 10.1109/ICME59968.2025.11210073
+
+Feature Affinity based Clustering for Test-Time
+Adaptation for Image Quality Assessment
+Meghna Kapoor
+
+Vinit Jakhetiya
+
+Badri Narayan Subudhi
+
+Dept. of Electrical Engineering
+IIT Jammu, India
+meghna@iitjammu.ac.in
+
+Dept. of Computer Science and Engineering
+IIT Jammu, India
+vinit.jakhetiya@iitjammu.ac.in
+
+Dept. of Electrical Engineering
+IIT Jammu, India
+subudhi.badri@iitjammu.ac.in
+
+Ankur Bansal
+
+Weisi Lin
+
+Dept. of Electrical Engineering
+IIT Jammu, India
+ankur.bansal@iitjammu.ac.in
+
+College of Computing and Data Science
+Nanyang Technological University, Singapore
+wslin@ntu.edu.sg
+
+Abstract—Recently, Test-Time Adaptation (TTA) algorithms
+have gained traction in image/video quality assessment
+(IQA/VQA). These methods use virtual losses, like group contrastive and rank loss, as auxiliary tasks to adapt batch
+normalization parameters, helping models generalize better to
+distribution shifts between training and testing datasets. Group
+contrastive loss clusters images into low- and high-quality groups
+based on predicted quality scores, maximizing feature space
+distance between them. However, its effectiveness relies on the
+base model’s ability to accurately predict quality scores, which
+can be compromised when distribution shifts occur, leading to
+suboptimal adaptation and degraded performance. We propose
+a novel clustering approach based on the assumption that highquality images contain richer high-level information, which is
+extracted using a pre-trained VGG-16 model. Images are clustered by comparing the VGG-16 features of the highest quality
+image in a batch with the others, enabling effective grouping
+based on feature affinities. These accurate clusters enhance
+the computation of contrastive loss, improving the adaptation
+of batch normalization layers. Additionally, we introduce an
+adaptive rank loss to reduce the impact of rank loss when the
+base model can distinguish images with varying distortion levels.
+Experimental results across multiple image quality assessment
+datasets, including LIVE, CID-2013, KONIQ-10K, and SPAQ, as
+well as algorithms like MetaIQA, HyperIQA, TReS, and MUSIQ,
+show that the proposed method consistently performs better than
+the existing Test-Time Adaptation (TTA) approach.
+Index Terms—Test-time adaptation, Image quality assessment,
+Batch normalization layer, Distribution shift, Group contrastive
+loss.
+
+I. I NTRODUCTION
+Image Quality Assessment (IQA) is crucial for objectively
+predicting an image’s perceptual quality, aligning with the
+human visual system’s perception. It is also used as a loss
+function in deep learning models for various image processing
+and computer vision tasks. Methods such as those proposed
+by [1]–[3] use deep features or semantic cues to assess image
+quality, while others rely on low-level features like local
+distortions [4], [5]. Despite these advances, the performance
+of most IQA models is limited when evaluating images which
+have a distribution different from the training dataset.
+
+Test-Time Adaptation (TTA) has emerged as an effective
+approach to handle distribution shifts between training and
+testing datasets. TTA methods adjust a limited set of model parameters in an unsupervised manner during the testing phase to
+adapt the baseline model to specific datasets. In literature a few
+methods are proposed for TTA such as augmentation-based
+TTA [6], pseudo-labeling [7], [8], and entropy minimization
+[9] have demonstrated significant potential in enhancing model
+performance across various tasks. Since labels for testing data
+are unavailable during TTA, auxiliary tasks are employed
+to facilitate adaptation. These include aligning feature similarities within a group [10] or across previous test samples
+[7], generating pseudo-class labels [11], creating augmented
+views [12], [13], and applying data augmentations such as
+color transformations [14]. These strategies help compute
+the pseudo-contrastive loss to adapt the batch normalization
+layers. At the same time, TTA methods explicitly designed
+for Image Quality Assessment (IQA) tasks are very limited,
+and the TTA strategies mentioned above cannot be directly
+applied to IQA. Recently, Roy et al. [10] introduced a TTA
+method for no-reference IQA that utilizes pseudo auxiliary
+tasks such as group contrastive (GC) and rank loss to adjust
+batch normalization layers. To estimate the GC loss, the feature distance between clusters of low-quality and high-quality
+images is calculated. These clusters are formed based on the
+quality score predictions by the base model. This IQA-TTA
+method faces challenges when the training and testing data
+distribution differs significantly. In such cases, the base model
+may struggle to generate accurate image clusters, leading to
+erroneous GC loss estimation and limited performance. With
+this in mind, there is a need for a more effective clustering
+algorithm for IQA-TTA and a new IQA-TTA algorithm.
+This paper introduces a novel TTA approach for noreference IQA that utilizes pre-trained deep learning models,
+specifically VGG-16, to improve perceptual feature grouping. The proposed method incorporates two auxiliary loss
+functions—feature affinity-based group contrastive loss and
+adaptive rank loss—to enable adaptation during inference. The
+
+Authorized licensed use limited to: Indian Institute Of Technology Jammu. Downloaded on May 25,2026 at 09:24:17 UTC from IEEE Xplore. Restrictions apply.
+
+performance. This underscores the need for a more effective
+clustering method to ensure accurate contrastive loss computation and improve the generalization of IQA-TTA across
+different datasets.
+III. T HE PROPOSED A LGORITHM
+
+Fig. 1: Clustering a batch of images from the LIVE dataset
+using the source model (MetaIQA) highlights misclassified
+samples in red, resulting in suboptimal performance of the
+GC loss.
+
+major contributions of the proposed work are as follows:
+1) We propose a feature affinity-based group contrastive
+loss framework that leverages pre-trained features and
+attention mechanisms, ensuring robustness to dataset
+distribution shifts.
+2) We propose an adaptive rank-based metric that reduces
+the impact of rank loss during model adaptation when
+the base model can effectively distinguish an image from
+its distorted versions.
+3) The proposed TTA algorithm demonstrates improved
+performance compared to existing methods, showing
+consistent enhancements over state-of-the-art TTA approaches for IQA across various datasets.
+The article is structured as follows: Section II covers the
+motivation, Section III details the proposed losses, Section IV
+presents experiments, and Section V concludes with future
+directions.
+II. M OTIVATION
+The IQA-TTA approach [10] utilizes group contrastive and
+rank losses to adapt the parameters of batch normalization
+layers, relying on the base model’s ability to classify images
+into high- and low-quality clusters. However, this method
+assumes that the base model can accurately predict the relative
+quality scores for unseen data and subsequently create the
+clusters of low- and high-quality images to compute the
+GC loss. This assumption fails when there is a significant
+distribution shift between the training and testing datasets.
+For example, Fig. 1 shows 8 images from the LIVE dataset,
+along with their corresponding mean opinion scores (MOS)
+and predicted quality scores using the MetaIQA algorithm
+[15]. The MetaIQA algorithm is trained on the TID2013
+and KADID-10K datasets. From this figure, it is evident
+that the high-quality image ‘Hat’ is misclassified as lowquality, while the low-quality image ‘Butterfly’ is misclassified
+as high-quality. This results in inaccurate cluster formation,
+leading to incorrect contrastive loss calculation and reduced
+
+This section presents a novel TTA algorithm for noreference IQA. The proposed method incorporates two auxiliary tasks: feature affinity-based perceptual group contrastive
+loss and adaptive rank loss, to adapt the feature extractor of
+a pre-trained IQA model during inference. These tasks aim
+to align the training and testing data distributions without
+requiring labeled data, enabling effective quality assessment
+even under distributional shifts. The details of the proposed
+algorithm are given in the following subsections:
+A. Problem statement
+Following the framework of IQA-TTA [10], we consider
+a source/base model, denoted as Sθ comprising a feature
+extractor (θf ) and a quality regressor (θr ). TTA focuses
+on updating only the feature extractor θf during inference,
+aligning it with the test data distribution while preserving
+the characteristics of the training distribution. To facilitate
+this update, a projection head θP is added with the feature
+extractor (θf ) to project extracted features into a lowerdimensional space. The following loss function is utilized to
+jointly optimize θf and θP , leveraging auxiliary losses in the
+absence of true labels.
+θf∗ , θP∗ = arg min L(θ)
+θ
+
+The loss function, L is formulated as a combination of
+the proposed feature affinity-based group contrastive loss
+and adaptive rank loss, where θ = {θf , θP } represents the
+parameters being optimized for the test data.
+B. Feature Affinity-based Group Contrastive (FAGC) loss
+The overall pipeline of the Feature Affinity-based Group
+Contrastive (FAGC) loss is illustrated in Fig. 2. This proposed
+loss enhances the separability between high- and low-quality
+image clusters. In the IQA-TTA method, a mini-batch of
+images is divided into two clusters: C1 , representing lowquality images, and C2 , representing high-quality images,
+based on their predicted scores from the base model. The
+group contrastive (GC) loss is then calculated by maximizing
+the feature distance between these two clusters.
+Notably, the IQA-TTA [10] model forms clusters based on
+predictions made by the base model, which may not perform
+efficiently on the testing data, resulting in improperly formed
+clusters. At the same time, it can be assumed that images
+with richer high-level information possess better perceptual
+quality. Motivated by this observation, we propose a new
+clustering method for GC loss calculation leveraging the pretrained VGG-16 architecture. For a given set of images,
+{x1 , x2 , · · · xN }, is fed to the base model S to calculate
+the quality scores, and here, N is the batch size. Let imax
+be the index of the image with the best perceptual quality
+
+Authorized licensed use limited to: Indian Institute Of Technology Jammu. Downloaded on May 25,2026 at 09:24:17 UTC from IEEE Xplore. Restrictions apply.
+
+Fig. 2: The proposed feature affinity-based group contrastive loss uses the highest quality image from the source model, which
+is passed through VGG-16 to extract features. The features of the other samples in the mini-batch are projected into feature
+space to compute affinity scores, which are then used to sort and cluster the samples.
+
+Images with higher feature affinity with the highest perceptual quality image are classified into high-quality clusters (C1 ),
+while those with lower feature affinity are grouped into lowquality clusters (C2 ). These clusters are employed to calculate
+the Feature Affinity-based Group Contrastive (FAGC) loss by
+maximizing the feature distance between images in opposite
+clusters and minimizing the feature distance between images
+within the same cluster. The FAGC loss for the ith sample
+in a high-quality cluster (C1 ), with respect to the j th sample
+in same cluster and other k th samples in a low-quality image
+cluster (C2 ), is computed as:
+
+
+exp
+
+LF AGC = − log  P
+
+
+
+Sim(li ,lj )
+τ
+
+N
+k=(N/2)+1 exp
+
+Fig. 3: Proposed adaptive rank loss used for test time adaptation.
+
+estimated using the base model S. The same set of images
+{x1 , x2 , · · · xN } are fed to pre-trained VGG-16 to extract the
+perceptual features {f1 , f2 , · · · , fN }. Similarly, fimax represents the VGG-16 features of the image with the highest
+perceptual quality. If another image exhibits similar feature
+affinity with fimax , it can be inferred that the image also
+contains rich high-level information and can be regarded as
+high quality. The feature affinity (aff) between fimax and
+remaining of the images in a batch is calculated using cosine
+similarity as:
+
+aff (fimax , fi ) =
+
+fimax · fi
+,
+∥fimax ∥∥fi ∥
+
+∀i ∈ N, i ̸= imax
+
+(1)
+
+
+
+
+
+Sim(li ,lk )
+τ
+
+
+
+
+(2)
+
+Here, li and lj represent the features extracted from the projection head (θP ) for the ith and j th samples, and Sim(li , lj )
+denotes the similarity between these features, calculated using
+the attention between them. Additionally, τ is a temperature
+parameter that controls the sharpness of the distribution,
+thereby enhancing the model’s ability to effectively separate
+the clusters. Similarly, the LF AGC loss is also computed for
+the other samples in clusters C1 and C2 .
+C. Adaptive Rank loss
+The GC loss struggles to perform effectively when images
+in a batch exhibit similar perceptual quality [10], as efficient
+clusters may not be formed. On the other hand, the rank
+loss assumes that the features extracted by an efficient quality
+assessment algorithm from the feature extraction module (θf )
+of an image will be less affected by lower noise and more
+significantly altered by higher noise. If the base model violates this assumption, it indicates that the base model cannot
+
+Authorized licensed use limited to: Indian Institute Of Technology Jammu. Downloaded on May 25,2026 at 09:24:17 UTC from IEEE Xplore. Restrictions apply.
+
+TABLE I: Summary of datasets used for TTA of IQA metrics.
+Dataset
+
+Description
+
+LIVE [16]
+
+29 reference images distorted with various factors,
+generating 779 distorted images.
+Images captured from 79 imaging devices, totaling
+480 images.
+Approximately 10k images captured in the wild,
+featuring natural distortions.
+11,125 images captured by smartphones, also featuring natural distortions.
+
+CID 2013 [17]
+KONIQ-10K [18]
+SPAQ [19]
+
+LAdaptive Rank = −
+
+distinguish between slightly noisy and heavily noisy images,
+thus requiring adaptation. Conversely, when the base model
+can effectively differentiate between less noisy and noisy
+images, adaptation is no longer needed. However, the IQATTA [10] continues to update the base model (upto some
+extent) regardless of the base model’s ability to differentiate
+between images with varying perceptual qualities. In light of
+this, we propose a new adaptive rank mechanism that applies
+the rank loss selectively, depending on the base model’s ability
+to distinguish between images with varying perceptual quality.
+Let fhigh , flow , and factual represent features (extracted from
+the feature extraction module θP of the base model) of highly
+degraded, mildly degraded, and original images, respectively.
+In an ideal situation when base model is efficient enough, the
+following relationship between these features should exist:
+∥ fhigh − factual ∥2 > ∥ flow − factual ∥2
+{z
+}
+|
+{z
+}
+|
+dhigh
+
+(3)
+
+dlow
+
+The proposed adaptive rank loss is based on the observation
+that if, in most scenarios, the base model can effectively
+distinguish between highly and less distorted images, then
+adaptation using the rank loss is not required, and vice versa.
+With this in mind, we propose counting (using counters
+counter1 and counter2) the number of times the rank loss,
+as an auxiliary loss, is required (|dhigh | − |dlow | > 0) or not
+required (|dhigh | − |dlow | ≤ 0). The adaptive term (γ) for the
+rank loss is defined as:
+TABLE II: Summary of Models addapted Using the proposed
+TTA Method.
+Model
+
+Training Dataset
+
+MetaIQA [15]
+HyperIQA [22]
+TReS [24]
+MUSIQ [25]
+
+Trained on TID2013 [20] and KADID-10K dataset [21].
+Trained on LIVEFB database [23].
+Trained on LIVEFB database [23].
+Trained on LIVEFB database [23].
+
+N
+X
+
+log(yi )
+
+(5)
+
+i=1
+
+Here y is the predicted probability which is calculated as:
+y = P (dhigh ≥ dlow ) =
+
+exp (γ)
+1 + exp (γ)
+
+(6)
+
+Here, it is evident from equation (4) that the inclusion of the
+parameter γ allows the model to adaptively determine when
+the rank loss is required during the adaptation of base model.
+D. Total loss
+The final loss required to adapt the based model is a
+weighted combination of the proposed FAGC (LFAGC ) and the
+adaptive rank (LAdaptive Rank ) losses:
+L = α1 · LFAGC + α2 · LAdaptive Rank
+
+(7)
+
+Where α1 and α2 are weights that determine the contributions of the FAGC and Adaptive rank losses, respectively. As
+suggested by IQA-TTA [10], these parameters are empirically
+set to one.
+IV. E XPERIMENTS AND R ESULTS
+This section presents the implementation details of the
+proposed method, followed by a comprehensive performance
+evaluation and a comparison with state-of-the-art methods.
+Furthermore, an ablation study is conducted to analyze the individual contributions of the proposed FAGC and adaptive rank
+losses. The proposed algorithm is also exclusively compared
+with IQA-TTA [10], as it is, to the best of our knowledge, the
+most recent method in the literature that applies Test-Time
+Adaptation (TTA) for image quality assessment metrics.
+A. Implementation details
+The proposed model is implemented on an NVIDIA A100
+GPU with 80 GB of RAM, utilizing the PyTorch framework
+on a Linux-based operating system. A batch size of 8 is used
+to update the batch normalization layers, while the rest of the
+base model parameters/hyperparameters remain unaltered. The
+proposed algorithm is applied to perform TTA for four IQA
+algorithms (details provided in Table II) and is evaluated on
+four datasets (details provided in Table I) across these IQA
+algorithms. For MetaIQA, the base model without adaptation
+processes a batch of eight images in 5.603 ms, IQA-TTA [10]
+takes approximately 6.846 ms, and our proposed method takes
+around 7.204 ms.
+B. Performance Analysis
+
+(
+λ,
+if counter1 ≥ counter2
+γ=
+dhigh − dlow , otherwise
+
+(4)
+
+Where λ is a constant term used to alleviate the impact of
+the rank loss during TTA. We empirically set λ to one, and
+changing this value does not significantly affect the overall
+performance of the proposed algorithm. The adaptive rank loss
+for a batch of size N is defined as:
+
+To assess the performance of the proposed method, we
+utilize correlation metrics such as Spearman’s Rank Order
+Correlation Coefficient (SRCC) and Pearson’s Linear Correlation Coefficient (PLCC). SRCC measures the consistency of
+ranking between samples, while PLCC evaluates the agreement between predicted scores and the Mean Opinion Scores
+(MOS) in the dataset. Table III provides a quantitative comparison of the results for Group Contrastive [10], the proposed
+
+Authorized licensed use limited to: Indian Institute Of Technology Jammu. Downloaded on May 25,2026 at 09:24:17 UTC from IEEE Xplore. Restrictions apply.
+
+TABLE III: Performance comparison of the proposed TTA algorithm with existing TTA methods across multiple algorithms
+and datasets. Here ↑ indicates that a higher value is better, while red and blue denote the best and second-best performances.
+Additionally, GC and FAGC are abbreviations for Group Contrastive and Feature Affinity-Based Group Contrastive Loss.
+Algorithm ↓
+
+Dataset →
+
+Live Dataset [16]
+
+SPAQ Dataset [19]
+
+CID [17]
+
+KONIQ [18]
+
+Average
+
+SRCC ↑
+
+PLCC ↑
+
+SRCC ↑
+
+PLCC ↑
+
+SRCC ↑
+
+PLCC ↑
+
+SRCC ↑
+
+PLCC ↑
+
+SRCC ↑
+
+PLCC ↑
+
+MetaIQA [15]
+
+Base
+GC only [10]
+Rank only [10]
+GC+ Rank [10]
+FAGC (proposed)
+Adaptive rank (proposed)
+Overall (Proposed)
+
+0.73231
+0.75668
+0.76708
+0.78986
+0.81800
+0.79887
+0.85206
+
+0.67319
+0.69291
+0.73120
+0.76469
+0.75719
+0.76708
+0.83264
+
+0.59636
+0.62566
+0.63955
+0.60067
+0.68807
+0.65004
+0.70545
+
+0.54684
+0.57872
+0.60707
+0.57503
+0.64260
+0.61722
+0.69027
+
+0.72126
+0.78631
+0.75564
+0.77227
+0.76931
+0.75638
+0.77201
+
+0.68168
+0.70678
+0.72246
+0.73644
+0.70916
+0.71399
+0.73212
+
+0.52097
+0.54506
+0.53441
+0.55492
+0.55496
+0.55496
+0.57355
+
+0.47602
+0.50435
+0.51042
+0.53278
+0.51426
+0.52895
+0.55288
+
+0.64273
+0.67843
+0.67417
+0.67943
+0.70758
+0.69006
+0.72577
+
+0.60409
+0.63224
+0.64906
+0.65767
+0.66616
+0.66346
+0.70674
+
+HyperIQA [22]
+
+Base
+GC only [10]
+Rank only [10]
+GC+ Rank [10]
+FAGC (proposed)
+Adaptive rank (proposed)
+Overall (Proposed)
+
+0.51316
+0.50576
+0.56668
+0.53721
+0.61203
+0.56442
+0.58841
+
+0.44358
+0.43590
+0.52819
+0.49698
+0.53866
+0.51907
+0.55186
+
+0.59577
+0.69863
+0.62146
+0.60333
+0.74663
+0.68022
+0.61012
+
+0.56162
+0.64298
+0.59352
+0.57319
+0.66542
+0.62055
+0.58167
+
+0.53247
+0.48519
+0.50852
+0.61595
+0.52178
+0.50863
+0.56660
+
+0.65048
+0.59058
+0.61670
+0.67336
+0.61812
+0.61127
+0.65946
+
+0.59406
+0.64699
+0.61441
+0.61963
+0.56363
+0.62301
+0.61856
+
+0.63612
+0.68415
+0.66542
+0.66967
+0.61542
+0.66902
+0.66699
+
+0.55887
+0.58414
+0.57777
+0.59403
+0.61102
+0.59407
+0.59592
+
+0.57013
+0.58755
+0.59632
+0.60144
+0.60973
+0.60280
+0.61118
+
+TReS [24]
+
+Base
+GC only [10]
+Rank only [10]
+GC+ Rank [10]
+FAGC (proposed)
+Adaptive rank (proposed)
+Overall (Proposed)
+
+0.54340
+0.69484
+0.63626
+0.66124
+0.76628
+0.61155
+0.75962
+
+0.44499
+0.61707
+0.58653
+0.62124
+0.70189
+0.56062
+0.66970
+
+0.70137
+0.70883
+0.71887
+0.73341
+0.77507
+0.74663
+0.75364
+
+0.58539
+0.65216
+0.62782
+0.65357
+0.65696
+0.65410
+0.67820
+
+0.53247
+0.56397
+0.58973
+0.61595
+0.54450
+0.58773
+0.56660
+
+0.65048
+0.67087
+0.66756
+0.67336
+0.66179
+0.67059
+0.65946
+
+0.66896
+0.64109
+0.67117
+0.64682
+0.62221
+0.69244
+0.69174
+
+0.71042
+0.69844
+0.71985
+0.70063
+0.68232
+0.73847
+0.73811
+
+0.61155
+0.63330
+0.65401
+0.66435
+0.67702
+0.65959
+0.69290
+
+0.60056
+0.65492
+0.65115
+0.66263
+0.67599
+0.65667
+0.68768
+
+MUSIQ [25]
+
+Base
+GC only [10]
+Rank only [10]
+GC+ Rank [10]
+FAGC (proposed)
+Adaptive rank (proposed)
+Overall (Proposed)
+
+0.27867
+0.33566
+0.34355
+0.33452
+0.37017
+0.35930
+0.35609
+
+0.35615
+0.39592
+0.39782
+0.39478
+0.41219
+0.40757
+0.40627
+
+0.78694
+0.78442
+0.78083
+0.78224
+0.78275
+0.78204
+0.78417
+
+0.74800
+0.73603
+0.73045
+0.73232
+0.73340
+0.73200
+0.73435
+
+0.53207
+0.54784
+0.56233
+0.56264
+0.55018
+0.54753
+0.54689
+
+0.60643
+0.61864
+0.62934
+0.62658
+0.62185
+0.61803
+0.61757
+
+0.64586
+0.67063
+0.66638
+0.66822
+0.55488
+0.67001
+0.67113
+
+0.66822
+0.72507
+0.72215
+0.72193
+0.51420
+0.72522
+0.72627
+
+0.56088
+0.58464
+0.58827
+0.58691
+0.56491
+0.58972
+0.58957
+
+0.58794
+0.61206
+0.61361
+0.61250
+0.56984
+0.61451
+0.61480
+
+FAGC, Rank [10], the proposed Adaptive Rank, IQA-TTA
+[10], and the proposed overall algorithm. The results in Table
+III demonstrate that the proposed TTA method achieves better
+performance overall compared to the IQA-TTA [10] approach.
+These findings demonstrate the effectiveness and efficiency of
+the proposed algorithm.
+C. Ablation study
+An ablation study in Tables IV and V assesses the impact of
+feature extraction methods (such as pre-trained deep-learning
+methods) and similarity metrics. Among feature extraction
+methods, pretrained VGG-16 outperformed others on the LIVE
+[16], CID [17], and KONIQ-10K [18] datasets in terms of
+PLCC and SRCC. Cosine similarity in the latent space proved
+to be the most effective feature affinity metric, as shown in Table V. Additionally, the scatter plots in Fig. 4 demonstrate that
+the predicted scores from the proposed algorithm align more
+closely with the regression line, highlighting its effectiveness.
+V. C ONCLUSION
+In this work, we proposed a new TTA algorithm for IQA
+tasks, incorporating two auxiliary tasks: feature affinity-based
+group contrastive loss (FAGC) and adaptive rank loss. The
+FAGC loss, based on pre-trained deep learning models, efficiently clusters low and high-quality images. Additionally,
+adaptive rank loss mitigates the impact of rank loss when the
+base model distinguishes images with varying distortion levels.
+The proposed algorithm is tested with multiple algorithms
+
+across several datasets, outperforming existing methods in
+TTA tasks. One limitation of the proposed work is that it does
+not perform satisfactorily when the base model is unable to
+accurately identify images with the best perceptual quality. An
+
+TABLE IV: The ablation study to analyze the impact of
+different feature extraction algorithms on the proposed Feature
+Affinity based Group Contrastive (FAGC) loss. Red indicates
+the best performance. Here, FEM stands for the Feature
+Extraction Method.
+Model
+
+FEM
+
+Live [16]
+
+CID [17]
+
+KONIQ [18]
+
+Average
+
+SRCC PLCC SRCC PLCC SRCC PLCC SRCC PLCC
+Base
+VGG-16
+VGG-19
+MetaIQA [15] ResNet-18
+ResNet-50
+ViT
+InceptionV3
+
+0.732
+0.852
+0.688
+0.801
+0.850
+0.833
+0.716
+
+0.673
+0.832
+0.684
+0.779
+0.831
+0.811
+0.689
+
+0.721
+0.772
+0.611
+0.747
+0.781
+0.765
+0.701
+
+0.681
+0.732
+0.538
+0.711
+0.740
+0.728
+0.646
+
+0.520
+0.573
+0.447
+0.594
+0.560
+0.559
+0.414
+
+0.476
+0.552
+0.447
+0.566
+0.535
+0.537
+0.398
+
+0.658
+0.732
+0.582
+0.714
+0.643
+0.719
+0.611
+
+0.610
+0.705
+0.557
+0.685
+0.702
+0.692
+0.578
+
+Base
+VGG-16
+VGG-19
+HyperIQA [22] ResNet-18
+ResNet-50
+ViT
+InceptionV3
+
+0.513
+0.588
+0.587
+0.610
+0.608
+0.590
+0.589
+
+0.443
+0.551
+0.551
+0.569
+0.565
+0.552
+0.551
+
+0.503
+0.535
+0.531
+0.519
+0.518
+0.516
+0.496
+
+0.614
+0.608
+0.611
+0.612
+0.612
+0.605
+0.592
+
+0.594
+0.618
+0.623
+0.666
+0.619
+0.618
+0.574
+
+0.636
+0.666
+0.670
+0.621
+0.667
+0.667
+0.678
+
+0.536
+0.580
+0.580
+0.598
+0.582
+0.575
+0.553
+
+0.564
+0.609
+0.611
+0.601
+0.615
+0.608
+0.607
+
+Base
+VGG-16
+VGG-19
+TReS [24] ResNet-18
+ResNet-50
+ViT
+InceptionV3
+
+0.543
+0.759
+0.631
+0.675
+0.673
+0.673
+0.592
+
+0.444
+0.669
+0.580
+0.615
+0.614
+0.615
+0.540
+
+0.532
+0.566
+0.587
+0.597
+0.599
+0.596
+0.580
+
+0.650
+0.659
+0.661
+0.678
+0.679
+0.678
+0.660
+
+0.668
+0.691
+0.609
+0.647
+0.655
+0.649
+0.699
+
+0.710
+0.738
+0.663
+0.712
+0.716
+0.712
+0.744
+
+0.581 0.601
+0.672 0.689
+0.609 0.635
+0.639 0.668
+0.636 0.647
+0.639 0.668
+0.586 0.600
+
+Authorized licensed use limited to: Indian Institute Of Technology Jammu. Downloaded on May 25,2026 at 09:24:17 UTC from IEEE Xplore. Restrictions apply.
+
+Fig. 4: Scatter plot showing the relationship between the MOS
+and predicted scores using the base model, with GC loss,
+proposed FAGC, and the overall proposed TTA algorithm on
+the Live dataset [16], with MetaIQA [15] as the source model.
+TABLE V: Ablation study examines the impact of different
+feature affinity calculation methods on the proposed Feature
+Affinity-based Group Contrastive (FAGC) loss. Red denotes
+the best performance. CS: Cosine Similarity, ED: Euclidean
+Distance, PLCC: Pearson’s Linear Correlation Coefficient.
+Model
+
+Method
+
+Live [16]
+
+CID [17]
+
+KONIQ [18]
+
+Average
+
+SRCC PLCC SRCC PLCC SRCC PLCC SRCC PLCC
+MetaIQA [15]
+
+CS
+ED
+PLCC
+
+0.852 0.832 0.772 0.732 0.573
+0.827 0.811 0.733 0.737 0.585
+0.735 0.702 0.570 0.526 0.406
+
+0.552
+0.621
+0.381
+
+0.732 0.705
+0.715 0.723
+0.570 0.536
+
+HyperIQA [22]
+
+CS
+ED
+PLCC
+
+0.588 0.551 0.535 0.608 0.618
+0.588 0.552 0.517 0.611 0.618
+0.587 0.550 0.543 0.617 0.616
+
+0.666
+0.666
+0.665
+
+0.580 0.609
+0.574 0.610
+0.582 0.611
+
+TReS [24]
+
+CS
+ED
+PLCC
+
+0.759 0.669 0.566 0.659 0.691
+0.672 0.613 0.595 0.677 0.657
+0.674 0.615 0.599 0.680 0.651
+
+0.738
+0.719
+0.715
+
+0.672 0.689
+0.641 0.670
+0.642 0.670
+
+ensembling or ranking-based approach could be incorporated
+to mitigate these limitations.
+R EFERENCES
+[1] Chaofeng Chen, Jiadi Mo, Jingwen Hou, Haoning Wu, Liang Liao,
+Wenxiu Sun, Qiong Yan, and Weisi Lin, “TOPIQ: a top-down approach
+from semantics to distortions for image quality assessment,” IEEE
+Transactions on Image Processing, vol. 33, pp. 2404–2418, 2024.
+[2] Nyeong-Ho Shin, Seon-Ho Lee, and Chang-Su Kim, “Blind image
+quality assessment based on geometric order learning,” in Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2024.
+[3] Kangmin Xu, Liang Liao, Jing Xiao, Chaofeng Chen, Haoning Wu,
+Qiong Yan, and Weisi Lin, “Boosting image quality assessment through
+efficient transformer adaptation with local feature enhancement,” in
+Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, June 2024, pp. 2662–2672.
+[4] Chao Yang, Xinfeng Zhang, Ping An, Liquan Shen, and C-C Jay Kuo,
+“Blind image quality assessment based on multi-scale KLT,” IEEE
+Transactions on Multimedia, vol. 23, pp. 1557–1566, 2020.
+[5] Andleeb Sadiq, Imran Fareed Nizami, Syed Muhammad Anwar, and
+Muhammad Majid, “Blind image quality assessment using natural scene
+statistics of stationary wavelet transform,” Optik, vol. 205, pp. 164189,
+2020.
+[6] Marvin Zhang, Sergey Levine, and Chelsea Finn, “Memo: Test time
+robustness via adaptation and augmentation,” Advances in Neural
+Information Processing Systems, vol. 35, pp. 38629–38642, 2022.
+
+[7] Dian Chen, Dequan Wang, Trevor Darrell, and Sayna Ebrahimi, “Contrastive test-time adaptation,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2022, pp. 295–305.
+[8] Jian Liang, Dapeng Hu, and Jiashi Feng, “Do we really need to access
+the source data? source hypothesis transfer for unsupervised domain
+adaptation,” in International Conference on Machine Learning. PMLR,
+2020, pp. 6028–6039.
+[9] Dequan Wang, Evan Shelhamer, Shaoteng Liu, Bruno Olshausen, and
+Trevor Darrell, “Tent: Fully test-time adaptation by entropy minimization,” arXiv preprint, 2020.
+[10] Subhadeep Roy, Shankhanil Mitra, Soma Biswas, and Rajiv Soundararajan, “Test time adaptation for blind image quality assessment,” in
+Proceedings of the IEEE/CVF International Conference on Computer
+Vision, 2023, pp. 16742–16751.
+[11] Guanzi Chen, Jiying Zhang, Xi Xiao, and Yang Li, “Graphtta: Test time
+adaptation on graph neural networks,” arXiv preprint, 2022.
+[12] Yuejiang Liu, Parth Kothari, Bastien Van Delft, Baptiste Bellot-Gurlet,
+Taylor Mordan, and Alexandre Alahi, “Ttt++: When does selfsupervised test-time training fail or thrive?,” Advances in Neural
+Information Processing Systems, vol. 34, pp. 21808–21820, 2021.
+[13] Luca Zancato, Alessandro Achille, Tian Yu Liu, Matthew Trager, Pramuditha Perera, and Stefano Soatto, “Train/test-time adaptation with
+retrieval,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 2023, pp. 15911–15921.
+[14] Kota Yamashita and Kazuhiro Hotta, “Mixstyle-based contrastive testtime adaptation: Pathway to domain generalization,” in Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2024, pp. 1029–1037.
+[15] Hancheng Zhu, Leida Li, Jinjian Wu, Weisheng Dong, and Guangming
+Shi, “MetaIQA: deep meta-learning for no-reference image quality
+assessment,” in Proceedings of the IEEE Conference on Computer Vision
+and Pattern Recognition, Jun. 2020, pp. 14143–14152.
+[16] Hamid R Sheikh, Muhammad F Sabir, and Alan C Bovik, “A statistical
+evaluation of recent full reference image quality assessment algorithms,”
+IEEE Transactions on Image Processing, vol. 15, no. 11, pp. 3440–3451,
+2006.
+[17] Toni Virtanen, Mikko Nuutinen, Mikko Vaahteranoksa, Pirkko Oittinen,
+and Jukka Häkkinen, “CID2013: a database for evaluating no-reference
+image quality assessment algorithms,” IEEE Transactions on Image
+Processing, vol. 24, no. 1, pp. 390–402, 2014.
+[18] Vlad Hosu, Hanhe Lin, Tamas Sziranyi, and Dietmar Saupe, “KonIQ10k: an ecologically valid database for deep learning of blind image
+quality assessment,” IEEE Transactions on Image Processing, vol. 29,
+pp. 4041–4056, 2020.
+[19] Yuming Fang, Hanwei Zhu, Yan Zeng, Kede Ma, and Zhou Wang,
+“Perceptual quality assessment of smartphone photography,” in IEEE
+Conference on Computer Vision and Pattern Recognition, 2020, pp.
+3677–3686.
+[20] Nikolay Ponomarenko, Lina Jin, Oleg Ieremeiev, Vladimir Lukin, Karen
+Egiazarian, Jaakko Astola, Benoit Vozel, Kacem Chehdi, Marco Carli,
+Federica Battisti, et al., “Image database TID2013: peculiarities, results
+and perspectives,” Signal processing: Image communication, vol. 30,
+pp. 57–77, 2015.
+[21] Hanhe Lin, Vlad Hosu, and Dietmar Saupe, “KADID-10k: a largescale artificially distorted iqa database,” in Proceedings of International
+Conference on Quality of Multimedia Experience. IEEE, 2019, pp. 1–3.
+[22] Shaolin Su, Qingsen Yan, Yu Zhu, Cheng Zhang, Xin Ge, Jinqiu Sun,
+and Yanning Zhang, “Blindly assess image quality in the wild guided
+by a self-adaptive hyper network,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition, 2020, pp.
+3667–3676.
+[23] Zhenqiang Ying, Haoran Niu, Praful Gupta, Dhruv Mahajan, Deepti
+Ghadiyaram, and Alan Bovik, “From patches to pictures (PaQ-2-PiQ):
+Mapping the perceptual space of picture quality,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2020, pp. 3575–3585.
+[24] S Alireza Golestaneh, Saba Dadsetan, and Kris M Kitani, “No-reference
+image quality assessment via transformers, relative ranking, and selfconsistency,” in Proceedings of the IEEE/CVF Winter Conference on
+Applications of Computer Vision, 2022, pp. 1220–1230.
+[25] Junjie Ke, Qifei Wang, Yilin Wang, Peyman Milanfar, and Feng Yang,
+“Musiq: Multi-scale image quality transformer,” in Proceedings of the
+IEEE/CVF International Conference on Computer Vision, 2021, pp.
+5148–5157.
+
+Authorized licensed use limited to: Indian Institute Of Technology Jammu. Downloaded on May 25,2026 at 09:24:17 UTC from IEEE Xplore. Restrictions apply.
+
+
