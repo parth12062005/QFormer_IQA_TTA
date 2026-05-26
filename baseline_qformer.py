@@ -352,21 +352,21 @@ def main():
         csv_path="../EvalMi-50K/evalmi_train.csv",
     )
     train_dataloader = DataLoader(
-        train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn, num_workers=4, pin_memory=True,
+        train_dataset, batch_size=16, shuffle=True, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
     val_dataset = QFormerEmbeddingDataset(
         csv_path="../EvalMi-50K/evalmi_val.csv",
     )
     val_dataloader = DataLoader(
-        val_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
+        val_dataset, batch_size=16, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
     test_dataset = QFormerEmbeddingDataset(
         csv_path="../EvalMi-50K/evalmi_test.csv",
     )
     test_dataloader = DataLoader(
-        test_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
+        test_dataset, batch_size=16, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
     checkpoint_path = "./checkpoints/evalmi_baseline_qf_ver2.pth"
