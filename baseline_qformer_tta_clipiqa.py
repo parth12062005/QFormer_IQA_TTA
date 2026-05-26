@@ -2,23 +2,17 @@
 ##
 #### Test-Time Adaptation for baseline Q-Former IQA
 #### Only query_tokens (32x768) + projection head are updated via backprop
-#### Based on: "Feature Affinity based Clustering for TTA for IQA" (ICME 2025)
 ####
 #### Pipeline (episodic, per-batch):
 ####   1. Save original query_tokens
 ####   2. For each test batch:
-####      a. Cluster using VGG-16 feature affinity (not base model scores)
-####      b. Compute FAGC loss in projection space
-####      c. Backprop to update query_tokens + projection head
-####      d. Predict quality scores with adapted model
-####      e. Reset query_tokens for next batch
-####
-#### NOTE: Uses PRECOMPUTED ViT embeddings for Q-Former.
-####       Raw images are loaded separately for VGG-16 clustering.
+####      a. Predict CLIPIQA scores for the batch
+####      b. Cluster based on CLIPIQA scores (Top half C1, Bottom half C2)
+####      c. Compute FAGC loss in projection space
+####      d. Backprop to update query_tokens + projection head
+####      e. Predict quality scores with adapted model
+####      f. Reset query_tokens for next batch
 
-##### ----------------- ####
-#####  1) IMPORTS + UTILS
-##### ----------------- ####
 import os
 import numpy as np
 import pandas as pd
@@ -29,7 +23,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, models
+from torchvision import transforms
+
+# --- Monkey-patch for lavis + transformers >= 4.40 ---
+import transformers.modeling_utils
+if not hasattr(transformers.modeling_utils, "apply_chunking_to_forward"):
+    transformers.modeling_utils.apply_chunking_to_forward = lambda *args, **kwargs: None
 
 from lavis.models import load_model_and_preprocess
 
@@ -86,18 +85,18 @@ PROMPT_COL = "prompt"
 DESC_COL   = "gen_answer"
 GT_COL     = "gt_score"
 
-EMBED_ROOT = "/media/parth/Balance/parth/dataset/embeddings"
-IMG_ROOT   = os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/AIGI2025"))
-VAL_CSV    = os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/evalmi_val.csv"))
+EMBED_ROOT  = "/media/parth/Balance/parth/dataset/embeddings"
+IMG_ROOT    = os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/AIGI2025"))
+TRAIN_CSV   = os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/evalmi_train.csv"))
+TEST_CSV    = os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/evalmi_test.csv"))
 CHECKPOINT  = os.path.join(_SCRIPT_DIR, "checkpoints", "evalmi_baseline_qf.pth")
-RESULTS_DIR = os.path.join(_SCRIPT_DIR, "results")
+RESULTS_DIR = os.path.join(_SCRIPT_DIR, "results_clipiqa")
 
 
 ##### ----------------- ####
-#####  3) DATASET (precomputed embeds + raw images for VGG)
+#####  3) DATASET
 ##### ----------------- ####
 def _build_case_map(img_root):
-    """Build a mapping from lowercase dir names to actual dir names on disk."""
     case_map = {}
     for entry in os.listdir(img_root):
         if os.path.isdir(os.path.join(img_root, entry)):
@@ -107,23 +106,18 @@ def _build_case_map(img_root):
 _CASE_MAP = _build_case_map(IMG_ROOT)
 
 def _resolve_image_path(img_root, name):
-    """Resolve image path, fixing directory case mismatches."""
     parts = name.split("/")
     if len(parts) >= 2:
         parts[0] = _CASE_MAP.get(parts[0].lower(), parts[0])
     return os.path.join(img_root, *parts)
 
-
-# VGG image transform (ImageNet normalization)
-VGG_TRANSFORM = transforms.Compose([
+# Raw transform for pyiqa (no normalization, [0, 1] range)
+RAW_TRANSFORM = transforms.Compose([
     transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-
 class TTADataset(Dataset):
-    """Loads precomputed ViT embeddings AND raw images (for VGG clustering)."""
     def __init__(self, csv_path, embed_root=EMBED_ROOT, img_root=IMG_ROOT):
         self.df = pd.read_csv(csv_path)
         self.embed_root = embed_root
@@ -136,16 +130,14 @@ class TTADataset(Dataset):
         row = self.df.iloc[idx]
         img_name = str(row[IMG_COL])
 
-        # Precomputed ViT embedding
         embed_path = os.path.join(
             self.embed_root,
             img_name.replace(".png", ".npz").replace(".jpg", ".npz"),
         )
         image_embeds = torch.from_numpy(np.load(embed_path)["embed"]).float()
 
-        # Raw image for VGG (ImageNet-normalized)
         raw_path = _resolve_image_path(self.img_root, img_name)
-        raw_image = VGG_TRANSFORM(Image.open(raw_path).convert("RGB"))
+        raw_image = RAW_TRANSFORM(Image.open(raw_path).convert("RGB"))
 
         prompt = str(row[PROMPT_COL])
         desc   = str(row[DESC_COL])
@@ -159,7 +151,6 @@ class TTADataset(Dataset):
             "image_name": img_name,
             "gt_score": gt,
         }
-
 
 def collate_fn(batch):
     return {
@@ -176,16 +167,13 @@ def collate_fn(batch):
 #####  4) MODELS
 ##### ----------------- ####
 class Regressor(nn.Module):
-    """Single linear layer — matches the saved checkpoint."""
     def __init__(self, input_dim, output_dim=1):
         super().__init__()
         self.layer = nn.Linear(input_dim, output_dim)
     def forward(self, x):
         return self.layer(x)
 
-
 class ProjectionHead(nn.Module):
-    """Small MLP that projects mm_mean_embeds into a lower-dim space for FAGC loss."""
     def __init__(self, input_dim=768, hidden_dim=256, output_dim=128):
         super().__init__()
         self.net = nn.Sequential(
@@ -196,9 +184,7 @@ class ProjectionHead(nn.Module):
     def forward(self, x):
         return F.normalize(self.net(x), dim=-1)
 
-
 class QformerWrapper(nn.Module):
-    """Q-Former wrapper using PRECOMPUTED image embeddings (no ViT)."""
     def __init__(self, device, is_eval=False):
         super().__init__()
         model, _, _ = load_model_and_preprocess(
@@ -210,7 +196,6 @@ class QformerWrapper(nn.Module):
         self.model = model.to(device)
         self.device = device
 
-        # Free ViT from GPU memory
         del self.model.visual_encoder
         del self.model.ln_vision
         torch.cuda.empty_cache()
@@ -247,37 +232,28 @@ class QformerWrapper(nn.Module):
 
 
 ##### ----------------- ####
-#####  5) VGG-16 FEATURE EXTRACTOR (frozen, for clustering only)
+#####  5) CLIPIQA SCORER
 ##### ----------------- ####
-class VGGFeatureExtractor(nn.Module):
-    """Frozen VGG-16 conv features → adaptive avg pool → flat vector."""
+class CLIPIQAScorer(nn.Module):
     def __init__(self, device):
         super().__init__()
-        vgg = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1)
-        self.features = vgg.features
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.to(device)
-        self.eval()
+        import pyiqa
+        # Load CLIPIQA from pyiqa
+        self.metric = pyiqa.create_metric('clipiqa', device=device)
+        self.metric.eval()
         for p in self.parameters():
             p.requires_grad = False
-
+    
     @torch.no_grad()
     def forward(self, x):
-        """x: [B,3,224,224] ImageNet-normalized (already done in dataset)."""
-        x = self.features(x)
-        x = self.pool(x).flatten(1)
-        return F.normalize(x, dim=-1)
+        """x: [B,3,224,224] in [0,1] range."""
+        return self.metric(x)
 
 
 ##### ----------------- ####
 #####  6) FAGC LOSS
 ##### ----------------- ####
 def compute_fagc_loss(proj_feats, c1_idx, c2_idx, temperature=0.5):
-    """
-    Feature Affinity-based Group Contrastive loss (Eq. 2 from the paper).
-    For each sample in C1: positives from C1, negatives from C2.
-    Symmetrically computed for C2 as well.
-    """
     loss = torch.tensor(0.0, device=proj_feats.device)
     count = 0
 
@@ -307,28 +283,19 @@ def compute_fagc_loss(proj_feats, c1_idx, c2_idx, temperature=0.5):
 
     return loss / max(count, 1)
 
-
-def cluster_by_vgg_affinity(vgg_feats, anchor_idx):
+def cluster_by_clipiqa_scores(scores):
     """
-    Cluster images by cosine affinity to the anchor (highest predicted quality).
-    Top half → C1 (high quality), bottom half → C2 (low quality).
+    Cluster images by CLIPIQA scores.
+    Top half -> C1 (high quality), bottom half -> C2 (low quality).
     """
-    B = vgg_feats.size(0)
+    B = scores.size(0)
     if B < 2:
         return list(range(B)), []
-
-    anchor_feat = vgg_feats[anchor_idx].unsqueeze(0)
-    affinities = F.cosine_similarity(anchor_feat, vgg_feats, dim=-1)
-
-    sorted_indices = torch.argsort(affinities, descending=True).cpu().tolist()
+    
+    sorted_indices = torch.argsort(scores, descending=True).cpu().tolist()
     half = B // 2
     c1_idx = sorted_indices[:half]
     c2_idx = sorted_indices[half:]
-
-    if anchor_idx in c2_idx:
-        c2_idx.remove(anchor_idx)
-        c1_idx.append(anchor_idx)
-
     return c1_idx, c2_idx
 
 
@@ -341,9 +308,8 @@ print("device:", device)
 qformer   = QformerWrapper(device=device, is_eval=False).to(device)
 regressor = Regressor(input_dim=768, output_dim=1).to(device)
 proj_head = ProjectionHead(input_dim=768, hidden_dim=256, output_dim=128).to(device)
-vgg_extractor = VGGFeatureExtractor(device=device)
+clipiqa_scorer = CLIPIQAScorer(device=device)
 
-# Load pretrained checkpoint
 print(f"Loading checkpoint: {CHECKPOINT}")
 ckpt = torch.load(CHECKPOINT, map_location=device, weights_only=False)
 qformer.model.Qformer.load_state_dict(ckpt["qformer.Qformer"], strict=True)
@@ -351,116 +317,51 @@ qformer.model.query_tokens = nn.Parameter(ckpt["query_tokens"].to(device))
 regressor.load_state_dict(ckpt["regressor"], strict=True)
 print("Checkpoint loaded successfully.")
 
-# Freeze EVERYTHING
 for p in qformer.model.parameters():
     p.requires_grad = False
 for p in regressor.parameters():
     p.requires_grad = False
 
-# Unfreeze query_tokens, projection head, AND LayerNorms
 qformer.model.query_tokens.requires_grad = True
 for p in proj_head.parameters():
     p.requires_grad = True
 
-for name, param in qformer.model.Qformer.named_parameters():
-    if "LayerNorm" in name:
-        param.requires_grad = True
-
-# Print unfrozen parameters
-print("\n" + "-" * 40)
-print("  UNFROZEN PARAMETERS FOR TTA")
-print("-" * 40)
-total_tta_params = 0
-if qformer.model.query_tokens.requires_grad:
-    num_params = qformer.model.query_tokens.numel()
-    print(f"{'query_tokens':<40} : {num_params}")
-    total_tta_params += num_params
-
-for name, param in proj_head.named_parameters():
-    if param.requires_grad:
-        num_params = param.numel()
-        print(f"{'proj_head.' + name:<40} : {num_params}")
-        total_tta_params += num_params
-
-for name, param in qformer.model.Qformer.named_parameters():
-    if param.requires_grad:
-        num_params = param.numel()
-        print(f"{'Qformer.' + name:<40} : {num_params}")
-        total_tta_params += num_params
-print("-" * 40)
-print(f"{'TOTAL TTA PARAMS':<40} : {total_tta_params}")
-print("-" * 40 + "\n")
-
-# Save original query_tokens and LayerNorms for episodic reset
 ORIGINAL_QUERY_TOKENS = qformer.model.query_tokens.detach().clone()
-ORIGINAL_LAYERNORM_STATES = {
-    name: param.detach().clone()
-    for name, param in qformer.model.Qformer.named_parameters()
-    if "LayerNorm" in name
-}
 
 
 ##### ----------------- ####
 #####  8) TTA STEP
 ##### ----------------- ####
-TTA_STEPS = 1
+TTA_STEPS = 2
 TTA_LR    = 1e-4
 TAU       = 0.5
 
 def tta_adapt_batch(image_embeds, raw_images, prompts, descs):
-    """
-    Perform episodic TTA on a single batch:
-      1. Reset query_tokens to pretrained state
-      2. Reset projection head
-      3. Run TTA_STEPS of FAGC adaptation
-      4. Return adapted mm_mean_embeds for prediction
-    """
-    # Episodic reset
     with torch.no_grad():
         qformer.model.query_tokens.copy_(ORIGINAL_QUERY_TOKENS)
-        for name, param in qformer.model.Qformer.named_parameters():
-            if "LayerNorm" in name:
-                param.copy_(ORIGINAL_LAYERNORM_STATES[name])
-                
     for layer in proj_head.net:
         if hasattr(layer, 'reset_parameters'):
             layer.reset_parameters()
 
-    # Setup optimizer for this episode
-    tta_params = [qformer.model.query_tokens] + list(proj_head.parameters())
-    for name, param in qformer.model.Qformer.named_parameters():
-        if "LayerNorm" in name:
-            tta_params.append(param)
-            
     tta_optimizer = torch.optim.Adam(
-        tta_params,
+        [qformer.model.query_tokens] + list(proj_head.parameters()),
         lr=TTA_LR,
     )
 
     image_embeds = image_embeds.to(device)
     raw_images = raw_images.to(device)
 
-    # VGG features for clustering (computed once, frozen)
-    vgg_feats = vgg_extractor(raw_images)
+    # Calculate CLIPIQA scores
+    clipiqa_scores = clipiqa_scorer(raw_images).squeeze(-1) # [B]
 
-    # Get initial predicted scores to find anchor
-    with torch.no_grad():
-        qformer.eval()
-        regressor.eval()
-        init_embeds = qformer(image_embeds, prompts, descs)
-        init_scores = regressor(init_embeds).squeeze(-1)
-        anchor_idx = int(torch.argmax(init_scores).item())
+    # Cluster by CLIPIQA scores
+    c1_idx, c2_idx = cluster_by_clipiqa_scores(clipiqa_scores)
 
-    # Cluster by VGG affinity
-    c1_idx, c2_idx = cluster_by_vgg_affinity(vgg_feats, anchor_idx)
-
-    # Skip TTA if we can't form two non-empty clusters
     if len(c1_idx) < 2 or len(c2_idx) < 1:
         with torch.no_grad():
             qformer.eval()
             return qformer(image_embeds, prompts, descs)
 
-    # TTA adaptation steps
     qformer.train()
     proj_head.train()
 
@@ -472,7 +373,6 @@ def tta_adapt_batch(image_embeds, raw_images, prompts, descs):
         fagc_loss.backward()
         tta_optimizer.step()
 
-    # Final forward pass with adapted query_tokens
     qformer.eval()
     with torch.no_grad():
         adapted_embeds = qformer(image_embeds, prompts, descs)
@@ -484,7 +384,6 @@ def tta_adapt_batch(image_embeds, raw_images, prompts, descs):
 ##### ----------------- ####
 @torch.no_grad()
 def evaluate_no_tta(dataloader, desc_tag="Eval (no TTA)"):
-    """Baseline evaluation without TTA for comparison."""
     qformer.eval()
     regressor.eval()
     qformer.model.query_tokens.copy_(ORIGINAL_QUERY_TOKENS)
@@ -514,7 +413,6 @@ def evaluate_no_tta(dataloader, desc_tag="Eval (no TTA)"):
 
 
 def evaluate_with_tta(dataloader, desc_tag="Eval (FAGC TTA)"):
-    """Episodic TTA evaluation: adapt per batch, predict, reset."""
     regressor.eval()
 
     rows, pred_list, gt_list = [], [], []
@@ -552,41 +450,47 @@ def evaluate_with_tta(dataloader, desc_tag="Eval (FAGC TTA)"):
 ##### ----------------- ####
 if __name__ == "__main__":
     print("=" * 60)
-    print("FAGC TTA FOR BASELINE QFORMER (EvalMi-50K)")
-    print("Adapting: query_tokens + LayerNorms | Loss: FAGC | Episodic reset")
+    print("FAGC TTA FOR BASELINE QFORMER (EvalMi-50K) - CLIPIQA Clustering")
+    print("Adapting: query_tokens only | Loss: FAGC | Episodic reset")
     print(f"TTA_STEPS={TTA_STEPS}  TTA_LR={TTA_LR}  TAU={TAU}")
     print("=" * 60)
 
-    BATCH_SIZE  = 16   # as in the paper
-    NUM_WORKERS = 8
+    BATCH_SIZE  = 8
+    NUM_WORKERS = 4
 
-    # Build dataloaders
-    val_dataset = TTADataset(csv_path=VAL_CSV)
-    val_dataset.df = val_dataset.df.head(1000)
-    val_loader  = DataLoader(
-        val_dataset, batch_size=BATCH_SIZE, shuffle=False,
+    train_dataset = TTADataset(csv_path=TRAIN_CSV)
+    train_loader  = DataLoader(
+        train_dataset, batch_size=BATCH_SIZE, shuffle=False,
         collate_fn=collate_fn, num_workers=NUM_WORKERS, pin_memory=True,
     )
 
-    print(f"Val set: {len(val_dataset)} samples")
+    test_dataset = TTADataset(csv_path=TEST_CSV)
+    test_loader  = DataLoader(
+        test_dataset, batch_size=BATCH_SIZE, shuffle=False,
+        collate_fn=collate_fn, num_workers=NUM_WORKERS, pin_memory=True,
+    )
 
-    # ---- Create results directory ----
+    print(f"Train set: {len(train_dataset)} samples")
+    print(f"Test set:  {len(test_dataset)} samples")
+
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
-    # ---- Evaluate WITHOUT TTA (baseline) ----
     print("\n--- Evaluation WITHOUT TTA ---")
-    val_srcc_no, val_plcc_no, val_df_no = evaluate_no_tta(val_loader, desc_tag="Val (no TTA)")
+    train_srcc_no, train_plcc_no, train_df_no = evaluate_no_tta(train_loader, desc_tag="Train (no TTA)")
+    test_srcc_no,  test_plcc_no,  test_df_no  = evaluate_no_tta(test_loader,  desc_tag="Test (no TTA)")
 
-    print(f"\n  Val    SRCC={val_srcc_no:.6f}  PLCC={val_plcc_no:.6f}")
+    print(f"\n  Train  SRCC={train_srcc_no:.6f}  PLCC={train_plcc_no:.6f}")
+    print(f"  Test   SRCC={test_srcc_no:.6f}  PLCC={test_plcc_no:.6f}")
 
-    # ---- Evaluate WITH FAGC TTA ----
     print("\n--- Evaluation WITH FAGC TTA ---")
-    val_srcc_tta, val_plcc_tta, val_df_tta = evaluate_with_tta(val_loader, desc_tag="Val (FAGC TTA)")
+    train_srcc_tta, train_plcc_tta, train_df_tta = evaluate_with_tta(train_loader, desc_tag="Train (FAGC TTA)")
+    test_srcc_tta,  test_plcc_tta,  test_df_tta  = evaluate_with_tta(test_loader,  desc_tag="Test (FAGC TTA)")
 
-    print(f"\n  Val    SRCC={val_srcc_tta:.6f}  PLCC={val_plcc_tta:.6f}")
+    print(f"\n  Train  SRCC={train_srcc_tta:.6f}  PLCC={train_plcc_tta:.6f}")
+    print(f"  Test   SRCC={test_srcc_tta:.6f}  PLCC={test_plcc_tta:.6f}")
 
-    # ---- Save merged per-sample CSVs (single CSV per split) ----
-    for split_name, df_no, df_tta in [("val", val_df_no, val_df_tta)]:
+    for split_name, df_no, df_tta in [("train", train_df_no, train_df_tta),
+                                       ("test",  test_df_no,  test_df_tta)]:
         merged = df_no[["image_name", "gt_score"]].copy()
         merged["pred_no_tta"] = df_no["pred_score"]
         merged["pred_tta"]    = df_tta["pred_score"]
@@ -594,11 +498,11 @@ if __name__ == "__main__":
         merged.to_csv(out_path, index=False)
         print(f"[Saved] {out_path}")
 
-    # ---- Summary ----
     print("\n" + "=" * 60)
     print("  SUMMARY")
     print("=" * 60)
     print(f"{'':>8} {'SRCC (no TTA)':>14} {'SRCC (TTA)':>12} {'Δ SRCC':>10} {'PLCC (no TTA)':>14} {'PLCC (TTA)':>12} {'Δ PLCC':>10}")
     print("-" * 82)
-    print(f"{'Val':>8} {val_srcc_no:>14.6f} {val_srcc_tta:>12.6f} {val_srcc_tta-val_srcc_no:>+10.6f} {val_plcc_no:>14.6f} {val_plcc_tta:>12.6f} {val_plcc_tta-val_plcc_no:>+10.6f}")
+    print(f"{'Train':>8} {train_srcc_no:>14.6f} {train_srcc_tta:>12.6f} {train_srcc_tta-train_srcc_no:>+10.6f} {train_plcc_no:>14.6f} {train_plcc_tta:>12.6f} {train_plcc_tta-train_plcc_no:>+10.6f}")
+    print(f"{'Test':>8} {test_srcc_no:>14.6f} {test_srcc_tta:>12.6f} {test_srcc_tta-test_srcc_no:>+10.6f} {test_plcc_no:>14.6f} {test_plcc_tta:>12.6f} {test_plcc_tta-test_plcc_no:>+10.6f}")
     print("=" * 60)

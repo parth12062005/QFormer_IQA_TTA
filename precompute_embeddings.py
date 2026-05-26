@@ -22,15 +22,25 @@ from lavis.models import load_model_and_preprocess
 ##### ------------- ####
 #####  1) CONFIG
 ##### ------------- ####
-IMG_ROOT = "../EvalMi-50K/AIGI2025"
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+IMG_ROOT = os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/AIGI2025"))
 CSV_PATHS = [
-    "../EvalMi-50K/evalmi_train.csv",
-    "../EvalMi-50K/evalmi_val.csv",
-    "../EvalMi-50K/evalmi_test.csv",
+    os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/evalmi_train.csv")),
+    os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/evalmi_val.csv")),
+    os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/evalmi_test.csv")),
 ]
-EMBED_OUT_DIR = "/home/parth/dataset/embeddings"
+EMBED_OUT_DIR = "/media/parth/Balance/parth/dataset/embeddings"
 BATCH_SIZE = 500   # ~100 per GPU, fits in ~8GB free VRAM each
 NUM_WORKERS = 8
+
+
+def _build_case_map(img_root):
+    """Build a mapping from lowercase dir names to actual dir names on disk."""
+    case_map = {}
+    for entry in os.listdir(img_root):
+        if os.path.isdir(os.path.join(img_root, entry)):
+            case_map[entry.lower()] = entry
+    return case_map
 
 
 ##### ------------- ####
@@ -41,6 +51,7 @@ class ImageOnlyDataset(Dataset):
     def __init__(self, image_names, img_root):
         self.image_names = image_names
         self.img_root = img_root
+        self.case_map = _build_case_map(img_root)
         self.image_tf = transforms.Compose([
             transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC),
             transforms.ToTensor(),
@@ -53,9 +64,18 @@ class ImageOnlyDataset(Dataset):
     def __len__(self):
         return len(self.image_names)
 
+    def _resolve_path(self, name):
+        """Resolve image path, fixing directory case mismatches (e.g. infinity → Infinity)."""
+        parts = name.split("/")
+        if len(parts) >= 2:
+            dir_name = parts[0]
+            actual = self.case_map.get(dir_name.lower(), dir_name)
+            parts[0] = actual
+        return os.path.join(self.img_root, *parts)
+
     def __getitem__(self, idx):
         name = self.image_names[idx]
-        path = os.path.join(self.img_root, name)
+        path = self._resolve_path(name)
         image = Image.open(path).convert("RGB")
         image = self.image_tf(image)
         return image, name

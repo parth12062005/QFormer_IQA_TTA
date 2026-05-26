@@ -82,7 +82,7 @@ PROMPT_COL = "prompt"
 DESC_COL   = "gen_answer"   # change if your csv uses a different name
 GT_COL     = "gt_score"
 
-EMBED_ROOT = "/home/parth/dataset/embeddings"  # directory with precomputed .npz files
+EMBED_ROOT = "/media/parth/Balance/parth/dataset/embeddings"  # directory with precomputed .npz files
 
 class QFormerEmbeddingDataset(Dataset):
     """Loads precomputed ViT embeddings instead of raw images."""
