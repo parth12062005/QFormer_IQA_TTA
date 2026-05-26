@@ -369,7 +369,7 @@ def main():
         test_dataset, batch_size=16, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
-    checkpoint_path = "./checkpoints/evalmi_baseline_qf_ver2.pth"
+    checkpoint_path = "./checkpoints/evalmi_b.pth"
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
     best_srcc, best_test_srcc = -1.0, -1.0
