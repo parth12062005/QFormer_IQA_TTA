@@ -134,8 +134,8 @@ def collate_fn(batch):
 ##### ----------------- ####
 #####  3) DEVICE
 ##### ----------------- ####
-# Use GPU 1 (GPU 0 runs the display server)
-device = torch.device("cuda:1" if torch.cuda.device_count() > 1 else "cuda:0")
+# Use GPU 0 (GPU 1 is in error state after crash)
+device = torch.device("cuda:0")
 print(f"device: {device}")
 
 
