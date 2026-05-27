@@ -1,0 +1,25 @@
+1. train base model of QFormer Based shit. ( without the llm discription ).and try to get all results cross dataset as well as same dataset.  list results.
+2. Try 1. GC Loss 2.Rank loss 3.GC + Rank Loss 4.FAGC Loss (Try different Feature extrator all listed in the paper) 4.ARL 5. FAGC +ARL on 1. Query vectors  2. LayerNorm 3. Both.
+3. Try to form reasons and why that worked or not. and try to find flaws in logic.
+4. Fix what is TTA and where do we have to do it or require it and how can it help here.
+5. try to form few logic tta methods.
+6. Form a report and report back to Rajiv sir and have a discussion.
+6hrs
+TTA :: 
+## try such that train on only one or few Generation algo and test on other generation algo.
+
+
+Army Project related stuff:
+
+1. VIO multialgos find best and learn how they work. and report just how accurate they are in simulated environment. simulate pixel width of a drone camera and try to find visual vs ground truth accuracy at 50, 60, 70, 80, 90, 100m  
+2. Create a world, legit world which can depict real work scenarios. 
+3. Create a world top map and divide it in section and try map similarity algos and find predicted accuracy vs gt.
+4. yeah thats it for today. 
+6hrs
+
+Army project 2:
+1.Make Frontend better add memory and how to form query with present query and previous memory and fetch it.
+2.Create a Proper BenchMark and everything.
+3 hrs 
+
+
