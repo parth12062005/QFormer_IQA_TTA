@@ -4,6 +4,7 @@ TTA Engine — Orchestrates the test-time adaptation loop.
 Handles:
   - Model state reset (back to checkpoint) per batch
   - Conditional computation (augmentations / VGG) based on selected losses
+  - Adaptive distortion selection (blur/noise/compression) for rank losses
   - Optimizer setup for unfrozen parameters
   - Multi-step TTA optimization
   - Final clean prediction
@@ -14,7 +15,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from .param_strategy import get_tta_params, freeze_all_except
-from .augmentations import create_weak_augmentation, create_strong_augmentation
+from .augmentations import create_all_augmentations
 
 
 class TTAEngine:
@@ -22,13 +23,14 @@ class TTAEngine:
     Config-driven TTA engine.
 
     Args:
-        qformer:          QformerWrapper (with .model, .forward_qformer, .extract_image_embeds)
+        qformer:          QformerWrapper (with .forward_qformer, .extract_image_embeds)
         regressor:        Regressor module
         proj_head:        ProjectionHead module
         losses:           List of instantiated TTALoss objects
-        unfreeze_strategy: "layernorm" | "query" | "both"
+        unfreeze_strategy: "none" | "layernorm" | "query" | "both"
         tta_steps:        Number of optimization steps per batch
         tta_lr:           Learning rate for TTA optimizer
+        freeze_proj_head: If True, projection head is NOT updated during TTA
         vgg_extractor:    VGGFeatureExtractor (loaded only if any loss requires VGG)
         device:           torch.device
     """
@@ -40,8 +42,9 @@ class TTAEngine:
         proj_head,
         losses,
         unfreeze_strategy: str,
-        tta_steps: int = 1,
+        tta_steps: int = 3,
         tta_lr: float = 1e-3,
+        freeze_proj_head: bool = True,
         vgg_extractor=None,
         device=None,
     ):
@@ -52,6 +55,7 @@ class TTAEngine:
         self.unfreeze_strategy = unfreeze_strategy
         self.tta_steps = tta_steps
         self.tta_lr = tta_lr
+        self.freeze_proj_head = freeze_proj_head
         self.vgg_extractor = vgg_extractor
         self.device = device or torch.device("cuda:0")
 
@@ -84,6 +88,12 @@ class TTAEngine:
             for m in self._qf_layernorms
         ]
 
+        # Also snapshot proj_head if we're updating it
+        if not self.freeze_proj_head:
+            self._orig_proj_head = {
+                k: v.detach().clone() for k, v in self.proj_head.state_dict().items()
+            }
+
     def _reset_state(self):
         """Reset Q-Former params back to the checkpoint snapshot."""
         with torch.no_grad():
@@ -93,6 +103,69 @@ class TTAEngine:
                     m.weight.copy_(state["weight"])
                 if m.bias is not None and state["bias"] is not None:
                     m.bias.copy_(state["bias"])
+
+            # Reset proj_head too if we're updating it
+            if not self.freeze_proj_head:
+                self.proj_head.load_state_dict(self._orig_proj_head)
+
+    def _adaptive_distortion_selection(self, clip_images, old_preds):
+        """
+        Per-sample adaptive distortion selection (from original TTA-IQA).
+
+        Creates 3 distortion types (blur, noise, compression) at 2 severities.
+        For each sample, picks the distortion type where the model shows
+        the LARGEST prediction difference |pred_strong - pred_weak|.
+
+        Returns:
+            f_low_embeds:  (B, 257, 1408) — ViT embeddings of weak distortion
+            f_high_embeds: (B, 257, 1408) — ViT embeddings of strong distortion
+        """
+        with torch.no_grad():
+            # Create all 6 augmented versions
+            augs = create_all_augmentations(clip_images)
+
+            # Extract ViT embeddings for all 6
+            aug_embeds = {}
+            for name, aug_imgs in augs.items():
+                aug_embeds[name] = self.qformer.extract_image_embeds(aug_imgs)
+
+            # Get predictions for all 6 via QFormer + regressor
+            aug_preds = {}
+            for name, embeds in aug_embeds.items():
+                # Use dummy prompts since we only need relative predictions
+                B = embeds.size(0)
+                dummy_prompts = [""] * B
+                mm = self.qformer.forward_qformer(embeds, dummy_prompts, dummy_prompts)
+                aug_preds[name] = self.regressor(mm).squeeze(-1)
+
+            # For each sample, pick distortion type with largest |pred_strong - pred_weak|
+            diff_blur = torch.abs(aug_preds["blur_strong"] - aug_preds["blur_weak"])
+            diff_noise = torch.abs(aug_preds["noise_strong"] - aug_preds["noise_weak"])
+            diff_comp = torch.abs(aug_preds["comp_strong"] - aug_preds["comp_weak"])
+
+            all_diff = torch.stack([diff_blur, diff_noise, diff_comp], dim=1)  # (B, 3)
+            best_type = all_diff.argmax(dim=1)  # (B,) — 0=blur, 1=noise, 2=comp
+
+            # Map type indices to augmentation names
+            type_map = {
+                0: ("blur_weak", "blur_strong"),
+                1: ("noise_weak", "noise_strong"),
+                2: ("comp_weak", "comp_strong"),
+            }
+
+            # Select per-sample: build f_low and f_high tensors
+            B = clip_images.size(0)
+            embed_dim = aug_embeds["blur_weak"].shape[1:]  # (257, 1408)
+            f_low = torch.zeros(B, *embed_dim, device=self.device)
+            f_high = torch.zeros(B, *embed_dim, device=self.device)
+
+            for i in range(B):
+                t = best_type[i].item()
+                weak_name, strong_name = type_map[t]
+                f_low[i] = aug_embeds[weak_name][i]
+                f_high[i] = aug_embeds[strong_name][i]
+
+        return f_low, f_high
 
     def adapt_and_predict(self, batch):
         """
@@ -105,8 +178,8 @@ class TTAEngine:
                 - "descs": list[str]
                 - "gt_scores": (B,) tensor
                 - "image_names": list[str]
-                - (optional) "clip_images": (B, 3, 224, 224) raw images (for augmentations)
-                - (optional) "vgg_images": (B, 3, 224, 224) VGG-preprocessed images
+                - (optional) "clip_images": (B, 3, 224, 224) for augmentations
+                - (optional) "vgg_images": (B, 3, 224, 224) for VGG features
 
         Returns:
             preds: np.ndarray (B,)
@@ -166,11 +239,10 @@ class TTAEngine:
                     "to create augmented versions. Make sure the dataset provides them."
                 )
             clip_images = batch["clip_images"]
-            with torch.no_grad():
-                images_weak = create_weak_augmentation(clip_images)
-                images_strong = create_strong_augmentation(clip_images)
-                embeds_weak = self.qformer.extract_image_embeds(images_weak)
-                embeds_strong = self.qformer.extract_image_embeds(images_strong)
+            # Adaptive distortion selection: pick best distortion per sample
+            embeds_weak, embeds_strong = self._adaptive_distortion_selection(
+                clip_images, init_preds
+            )
 
         # --- Precompute VGG features if needed ---
         vgg_feats = None
@@ -185,10 +257,19 @@ class TTAEngine:
         params_to_update = get_tta_params(self.qformer, self.unfreeze_strategy)
         freeze_all_except(self.qformer, params_to_update)
 
-        # Also include proj_head params (always updated during TTA)
-        all_params = params_to_update + list(self.proj_head.parameters())
-        for p in self.proj_head.parameters():
-            p.requires_grad = True
+        # Optionally include proj_head params
+        if not self.freeze_proj_head:
+            all_params = params_to_update + list(self.proj_head.parameters())
+            for p in self.proj_head.parameters():
+                p.requires_grad = True
+        else:
+            all_params = params_to_update
+            for p in self.proj_head.parameters():
+                p.requires_grad = False
+
+        # If no params to update (strategy=none and proj_head frozen), skip
+        if len(all_params) == 0:
+            return
 
         optimizer = optim.Adam(all_params, lr=self.tta_lr)
 
@@ -199,7 +280,8 @@ class TTAEngine:
 
         # --- TTA optimization loop ---
         self.qformer.train()
-        self.proj_head.train()
+        if not self.freeze_proj_head:
+            self.proj_head.train()
 
         for step in range(self.tta_steps):
             optimizer.zero_grad()

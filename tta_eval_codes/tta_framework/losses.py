@@ -33,22 +33,25 @@ class TTALoss:
 
 # ---------------------------------------------------------------------------
 #  1) Group Contrastive (GC) Loss  — Roy et al. ICCV 2023
+#      Ported from original TTA-IQA GroupContrastiveLoss (util.py)
 # ---------------------------------------------------------------------------
 class GCLoss(TTALoss):
     """
-    Groups batch into high/low quality clusters using the model's own
-    predicted scores (top/bottom p%), then applies InfoNCE contrastive loss.
+    SimCLR-style group contrastive loss matching the original TTA-IQA.
+    Groups batch into high/low quality clusters using predicted scores,
+    concatenates them, and maximizes within-cluster similarity while
+    minimizing cross-cluster similarity.
     """
     name = "gc"
     requires_augmentations = False
     requires_vgg = False
 
-    def __init__(self, p: float = 0.25, temperature: float = 0.1):
+    def __init__(self, p: float = 0.25, temperature: float = 0.5):
         self.p = p
         self.temperature = temperature
 
     def __call__(self, ctx: dict) -> torch.Tensor:
-        feats = ctx["proj_feats"]              # (B, D), already L2-normed
+        feats = ctx["proj_feats"]              # (B, D)
         preds = ctx["predictions"]             # (B,)
         device = ctx["device"]
         B = feats.size(0)
@@ -57,25 +60,51 @@ class GCLoss(TTALoss):
         if B < 4:
             return torch.tensor(0.0, device=device, requires_grad=True)
 
+        # Cluster: bottom k = low quality, top k = high quality
         idx = torch.argsort(preds)
-        low_feats  = F.normalize(feats[idx[:k]], dim=-1)
-        high_feats = F.normalize(feats[idx[-k:]], dim=-1)
+        emb_i = feats[idx[:k]]     # low quality
+        emb_j = feats[idx[-k:]]    # high quality
+        n_i, n_j = emb_i.size(0), emb_j.size(0)
 
-        loss = 0.0
-        for i in range(k):
-            # anchor = high_feats[i]
-            pos_sim = torch.exp(torch.matmul(high_feats[i], high_feats.t()) / self.temperature)
-            neg_sim = torch.exp(torch.matmul(high_feats[i], low_feats.t()) / self.temperature)
-            pos_sum = pos_sim.sum() - pos_sim[i]  # exclude self
-            loss += -torch.log(pos_sum / (pos_sum + neg_sim.sum() + 1e-8))
+        # Normalize
+        z_i = F.normalize(emb_i, dim=1)
+        z_j = F.normalize(emb_j, dim=1)
 
-            # anchor = low_feats[i]
-            pos_sim_l = torch.exp(torch.matmul(low_feats[i], low_feats.t()) / self.temperature)
-            neg_sim_l = torch.exp(torch.matmul(low_feats[i], high_feats.t()) / self.temperature)
-            pos_sum_l = pos_sim_l.sum() - pos_sim_l[i]
-            loss += -torch.log(pos_sum_l / (pos_sum_l + neg_sim_l.sum() + 1e-8))
+        # Concatenate and compute full similarity matrix
+        representations = torch.cat([z_i, z_j], dim=0)  # (2k, D)
+        similarity_matrix = F.cosine_similarity(
+            representations.unsqueeze(1), representations.unsqueeze(0), dim=2
+        )  # (2k, 2k)
 
-        return loss / (2 * k)
+        # Within-cluster positive similarity (average, excluding self)
+        # pos block for z_i is top-left (n_i × n_j), for z_j is bottom-right
+        pos_sim_ij = similarity_matrix[:n_i, :n_j]
+        positives_mask_ij = (~torch.eye(n_i, n_j, dtype=bool, device=device)).float()
+        sim_ij = torch.sum(pos_sim_ij * positives_mask_ij, dim=1) / max(n_j - 1, 1)
+
+        pos_sim_ji = similarity_matrix[n_i:, n_j:]
+        positives_mask_ji = (~torch.eye(n_j, n_i, dtype=bool, device=device)).float()
+        sim_ji = torch.sum(pos_sim_ji * positives_mask_ji, dim=1) / max(n_i - 1, 1)
+
+        positives = torch.cat([sim_ij, sim_ji], dim=0)  # (2k,)
+
+        # Negatives mask: block off within-cluster pairs
+        total = n_i + n_j
+        negatives_mask = torch.ones(total, total, dtype=bool, device=device)
+        negatives_mask[:n_i, :n_j] = False   # block top-left
+        negatives_mask[n_i:, n_j:] = False   # block bottom-right
+        negatives_mask = negatives_mask.float()
+
+        # Loss
+        nominator = torch.exp(positives / self.temperature)
+        denominator = negatives_mask * torch.exp(similarity_matrix / self.temperature)
+
+        loss_partial = torch.sum(
+            nominator / (nominator + torch.sum(denominator, dim=1) + 1e-8)
+        ) / total
+        loss = -torch.log(loss_partial + 1e-8)
+
+        return loss
 
 
 # ---------------------------------------------------------------------------
@@ -105,13 +134,19 @@ class RankLoss(TTALoss):
 
 # ---------------------------------------------------------------------------
 #  3) Feature Affinity-based Group Contrastive (FAGC) Loss  — Kapoor et al. ICME 2025
+#      Matches Eq. 2 of the paper:
+#        L = -log( exp(Sim(li,lj)/τ) / Σ_k∈C_opp exp(Sim(li,lk)/τ) )
+#      Sim = scaled dot-product attention: (a·b)/√d
 # ---------------------------------------------------------------------------
 class FAGCLoss(TTALoss):
     """
     Uses VGG-16 feature affinity (cosine similarity with the highest-quality
-    image) to cluster the batch, then applies contrastive loss.
-    More robust than GC under distribution shift because clustering is
-    based on perceptual feature similarity rather than predicted scores.
+    image) to cluster the batch into C1 (high) and C2 (low), then applies
+    a per-anchor-per-positive contrastive loss.
+
+    For each anchor i in C1 and each positive j in C1 (j≠i):
+        L = -log( exp(Sim(li,lj)/τ) / Σ_{k∈C2} exp(Sim(li,lk)/τ) )
+    Same is computed for C2 anchors with C1 as negatives.
     """
     name = "fagc"
     requires_augmentations = False
@@ -135,7 +170,7 @@ class FAGCLoss(TTALoss):
         imax = torch.argmax(predictions)
         f_imax = vgg_feats[imax].unsqueeze(0)  # (1, D)
 
-        # Cosine affinity with all other images
+        # Cosine affinity with all other images (Eq. 1)
         affinities = F.cosine_similarity(f_imax, vgg_feats, dim=-1)  # (B,)
 
         # Split into two clusters by median affinity
@@ -150,6 +185,11 @@ class FAGCLoss(TTALoss):
 
         return c1_idx, c2_idx
 
+    def _scaled_dot_product_sim(self, a, b):
+        """Scaled dot-product attention similarity: (a·b)/√d"""
+        d = a.size(-1)
+        return torch.mm(a, b.t()) / (d ** 0.5)
+
     def __call__(self, ctx: dict) -> torch.Tensor:
         proj_feats  = ctx["proj_feats"]     # (B, D)
         vgg_feats   = ctx["vgg_feats"]      # (B, 512)
@@ -158,29 +198,48 @@ class FAGCLoss(TTALoss):
 
         c1_idx, c2_idx = self._cluster_by_vgg_affinity(vgg_feats, predictions)
 
+        c1_feats = proj_feats[c1_idx]  # (|C1|, D)
+        c2_feats = proj_feats[c2_idx]  # (|C2|, D)
+        n1, n2 = c1_feats.size(0), c2_feats.size(0)
+
+        if n1 < 2 or n2 < 1:
+            return torch.tensor(0.0, device=device, requires_grad=True)
+
         loss = 0.0
-        valid_clusters = 0
+        count = 0
 
-        for cluster_idx in [c1_idx, c2_idx]:
-            n = len(cluster_idx)
-            if n > 1:
-                feats = proj_feats[cluster_idx]
-                sim_matrix = torch.mm(feats, feats.t()) / self.temperature
-                sim_matrix.fill_diagonal_(-1e9)
+        # --- Anchors in C1, positives in C1, negatives in C2 ---
+        # Sim between all C1 pairs: (n1, n1)
+        sim_c1_c1 = self._scaled_dot_product_sim(c1_feats, c1_feats) / self.temperature
+        # Sim between C1 anchors and C2 negatives: (n1, n2)
+        sim_c1_c2 = self._scaled_dot_product_sim(c1_feats, c2_feats) / self.temperature
+        # Denominator: sum of exp(sim) over ALL C2 negatives
+        neg_sum_c1 = torch.sum(torch.exp(sim_c1_c2), dim=1)  # (n1,)
 
-                other_idx = c2_idx if cluster_idx is c1_idx else c1_idx
-                if len(other_idx) > 0:
-                    cross_sim = torch.mm(feats, proj_feats[other_idx].t()) / self.temperature
-                    logits = torch.cat([sim_matrix, cross_sim], dim=1)
-                else:
-                    logits = sim_matrix
+        for i in range(n1):
+            for j in range(n1):
+                if i == j:
+                    continue
+                numerator = torch.exp(sim_c1_c1[i, j])
+                loss += -torch.log(numerator / (neg_sum_c1[i] + 1e-8))
+                count += 1
 
-                labels = torch.arange(n, device=device)
-                loss += F.cross_entropy(logits, labels)
-                valid_clusters += 1
+        # --- Anchors in C2, positives in C2, negatives in C1 ---
+        if n2 >= 2:
+            sim_c2_c2 = self._scaled_dot_product_sim(c2_feats, c2_feats) / self.temperature
+            sim_c2_c1 = self._scaled_dot_product_sim(c2_feats, c1_feats) / self.temperature
+            neg_sum_c2 = torch.sum(torch.exp(sim_c2_c1), dim=1)  # (n2,)
 
-        if valid_clusters > 0:
-            return loss / valid_clusters
+            for i in range(n2):
+                for j in range(n2):
+                    if i == j:
+                        continue
+                    numerator = torch.exp(sim_c2_c2[i, j])
+                    loss += -torch.log(numerator / (neg_sum_c2[i] + 1e-8))
+                    count += 1
+
+        if count > 0:
+            return loss / count
         return torch.tensor(0.0, device=device, requires_grad=True)
 
 

@@ -128,13 +128,13 @@ class VGGFeatureExtractor(nn.Module):
             f = F.adaptive_avg_pool2d(f, (1,1)).view(f.size(0), -1)
         return F.normalize(f, p=2, dim=-1)
 
-# ── Projection Head ───────────────────────────────────────────────────────
+# ── Projection Head (matches original TTA-IQA: Linear → Sigmoid) ─────────
 class ProjectionHead(nn.Module):
-    def __init__(self, input_dim=768, hidden_dim=256, output_dim=128):
+    def __init__(self, input_dim=768, output_dim=128):
         super().__init__()
-        self.net = nn.Sequential(nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, output_dim))
+        self.net = nn.Sequential(nn.Linear(input_dim, output_dim), nn.Sigmoid())
     def forward(self, x):
-        return F.normalize(self.net(x), dim=-1)
+        return self.net(x)
 
 # ── Regressor ──────────────────────────────────────────────────────────────
 class Regressor(nn.Module):
@@ -306,12 +306,16 @@ def main():
     parser.add_argument("--dataset", type=str, required=True, choices=list(DATASET_CONFIGS.keys()))
     parser.add_argument("--losses", nargs="*", default=[], choices=list(LOSS_REGISTRY.keys()),
                         help="TTA losses to apply. Empty = baseline only.")
-    parser.add_argument("--unfreeze", type=str, default="both", choices=["none", "layernorm", "query", "both"])
-    parser.add_argument("--tta_steps", type=int, default=1)
+    parser.add_argument("--unfreeze", type=str, default="layernorm", choices=["none", "layernorm", "query", "both"])
+    parser.add_argument("--tta_steps", type=int, default=3)
     parser.add_argument("--tta_lr", type=float, default=1e-3)
     parser.add_argument("--temperature", type=float, default=0.5, help="Temperature for contrastive losses")
+    parser.add_argument("--freeze_proj_head", action="store_true", default=True,
+                        help="Keep projection head frozen during TTA (matches original)")
+    parser.add_argument("--update_proj_head", dest="freeze_proj_head", action="store_false",
+                        help="Allow projection head to be updated during TTA")
     parser.add_argument("--checkpoint", type=str, default=DEFAULT_CHECKPOINT)
-    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--split", type=str, default="test", choices=["train", "val", "test", "all"])
     parser.add_argument("--output_dir", type=str, default=None)
@@ -353,7 +357,7 @@ def main():
     print("Loading Q-Former model...")
     qformer = QformerWrapper(device=device, is_eval=True, keep_vit=keep_vit).to(device)
     regressor = Regressor(input_dim=768, output_dim=1).to(device)
-    proj_head = ProjectionHead(input_dim=768, hidden_dim=256, output_dim=128).to(device)
+    proj_head = ProjectionHead(input_dim=768, output_dim=128).to(device)
 
     print(f"Loading checkpoint: {args.checkpoint}")
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
@@ -419,6 +423,7 @@ def main():
                 qformer=qformer, regressor=regressor, proj_head=proj_head,
                 losses=losses, unfreeze_strategy=args.unfreeze,
                 tta_steps=args.tta_steps, tta_lr=args.tta_lr,
+                freeze_proj_head=args.freeze_proj_head,
                 vgg_extractor=vgg, device=device,
             )
 
