@@ -29,8 +29,8 @@ CSV_PATHS = [
     os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/evalmi_val.csv")),
     os.path.normpath(os.path.join(_SCRIPT_DIR, "../EvalMi-50K/evalmi_test.csv")),
 ]
-EMBED_OUT_DIR = "/media/parth/Balance/parth/dataset/embeddings"
-BATCH_SIZE = 500   # ~100 per GPU, fits in ~8GB free VRAM each
+EMBED_OUT_DIR = "/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/dataset/embeddings"
+BATCH_SIZE = 250   # ~100 per GPU, fits in ~8GB free VRAM each
 NUM_WORKERS = 8
 
 
