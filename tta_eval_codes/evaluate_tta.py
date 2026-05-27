@@ -206,6 +206,8 @@ class TTADataset(Dataset):
 
     @staticmethod
     def _build_lookup(img_root, has_subdirs):
+        if has_subdirs == "exact":
+            return None # Handle exactly inside getitem
         lookup = {}
         if has_subdirs:
             for sd in os.listdir(img_root):
@@ -248,9 +250,12 @@ class TTADataset(Dataset):
         }
 
         if self.load_raw:
-            path = self.img_lookup.get(img_name)
-            if path is None:
-                raise FileNotFoundError(f"Raw image not found: {img_name}")
+            if self.img_lookup is None:
+                path = os.path.join(self.cfg["img_root"], img_name)
+            else:
+                path = self.img_lookup.get(img_name)
+            if path is None or not os.path.exists(path):
+                raise FileNotFoundError(f"Raw image not found: {img_name} at {path}")
             img = Image.open(path).convert("RGB")
             out["clip_image"] = self.clip_tf(img)
             out["vgg_image"] = self.vgg_tf(img)
