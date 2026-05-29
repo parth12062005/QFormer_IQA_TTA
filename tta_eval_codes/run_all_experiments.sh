@@ -18,10 +18,15 @@ echo " Detected GPUs: $NUM_GPUS"
 echo " Logging to directory: $LOG_DIR"
 echo "=========================================================="
 
-DATASETS=("a3k" "a20k" "evalmi")
+DATASETS=("qval")
 LOSSES=("gc" "rank" "gc rank" "fagc" "adaptive_rank" "fagc adaptive_rank")
 UNFREEZES=("query" "layernorm" "both")
 PROJ_MODES=("--freeze_proj_head" "--update_proj_head")
+
+# Stabilization strategy arrays
+PROJ_INITS=("random" "identity")
+WARMUP_STEPS=(0 3)
+EMA_DECAYS=(0.0 0.99)
 
 # Generate all commands
 COMMANDS=()
@@ -38,14 +43,32 @@ for ds in "${DATASETS[@]}"; do
     for loss in "${LOSSES[@]}"; do
         for uf in "${UNFREEZES[@]}"; do
             for pm in "${PROJ_MODES[@]}"; do
-                loss_name=$(echo "$loss" | tr ' ' '+')
-                pm_name=$(echo "$pm" | sed 's/--//')
-                
-                cmd="python evaluate_tta.py --dataset $ds --losses $loss --unfreeze $uf $pm"
-                log_file="$LOG_DIR/${ds}_${loss_name}_${uf}_${pm_name}.log"
-                
-                COMMANDS+=("$cmd")
-                LOG_FILES+=("$log_file")
+                for init in "${PROJ_INITS[@]}"; do
+                    for warmup in "${WARMUP_STEPS[@]}"; do
+                        for ema in "${EMA_DECAYS[@]}"; do
+                            
+                            # Base loss name
+                            loss_name=$(echo "$loss" | tr ' ' '+')
+                            # If EMA is active, we append ema_consistency loss
+                            active_loss="$loss"
+                            if [ $(echo "$ema > 0.0" | bc -l) -eq 1 ]; then
+                                active_loss="$loss ema_consistency"
+                                loss_name="${loss_name}+ema"
+                            fi
+
+                            pm_name=$(echo "$pm" | sed 's/--//')
+                            
+                            # Construct command
+                            cmd="python evaluate_tta.py --dataset $ds --losses $active_loss --unfreeze $uf $pm --proj_init $init --warmup_steps $warmup --ema_decay $ema"
+                            
+                            # Construct log file name
+                            log_file="$LOG_DIR/${ds}_${loss_name}_${uf}_${pm_name}_init-${init}_warmup-${warmup}_ema-${ema}.log"
+                            
+                            COMMANDS+=("$cmd")
+                            LOG_FILES+=("$log_file")
+                        done
+                    done
+                done
             done
         done
     done

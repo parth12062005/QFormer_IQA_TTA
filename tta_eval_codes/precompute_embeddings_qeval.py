@@ -131,10 +131,7 @@ def main():
         if name in missing_on_disk:
             continue  # skip images not on disk
         
-        # Flatten directory structure for NPZ names or keep it?
-        # A3K/A20K flattens it. Let's replace '/' with '_' to keep it flat and safe
-        flat_name = name.replace("/", "_")
-        out_path = os.path.join(EMBED_OUT_DIR, flat_name.replace(".png", ".npz").replace(".jpg", ".npz"))
+        out_path = os.path.join(EMBED_OUT_DIR, name.replace(".png", ".npz").replace(".jpg", ".npz").replace(".jpeg", ".npz"))
         if not os.path.exists(out_path):
             remaining.append(name)
 
@@ -187,11 +184,11 @@ def main():
 
             # Save each embedding individually as compressed float16 numpy
             for i, name in enumerate(names):
-                flat_name = name.replace("/", "_")
                 out_path = os.path.join(
                     EMBED_OUT_DIR,
-                    flat_name.replace(".png", ".npz").replace(".jpg", ".npz"),
+                    name.replace(".png", ".npz").replace(".jpg", ".npz").replace(".jpeg", ".npz")
                 )
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
                 np.savez_compressed(out_path, embed=embeds[i].half().cpu().numpy())
 
     print(f"\nDone! Embeddings saved to: {EMBED_OUT_DIR}")

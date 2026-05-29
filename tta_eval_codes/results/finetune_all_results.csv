@@ -1,0 +1,17 @@
+dataset,checkpoint,fraction_pct,test_srcc,test_plcc,best_epoch
+a20k,evalmi_baseline_qf,5,0.828147,0.881913,10
+a20k,evalmi_baseline_qf,10,0.844550,0.888501,8
+a20k,evalmi_baseline_qf,20,0.868015,0.905846,8
+a3k,evalmi_baseline_qf,5,0.851161,0.888528,5
+a3k,evalmi_baseline_qf,10,0.854327,0.896453,6
+a3k,evalmi_baseline_qf,20,0.870479,0.906976,8
+a20k,evalmi_baseline_qf_2,5,0.839205,0.882210,12
+a20k,evalmi_baseline_qf,0,0.813179,0.806280,0
+a3k,evalmi_baseline_qf,0,0.805780,0.820267,0
+a20k,evalmi_baseline_qf_2,0,0.808167,0.795781,0
+a3k,evalmi_baseline_qf_2,0,0.826125,0.832033,0
+a20k,evalmi_baseline_qf_2,10,0.848712,0.890490,2
+a20k,evalmi_baseline_qf_2,20,0.862940,0.900480,11
+a3k,evalmi_baseline_qf_2,5,0.857628,0.899391,7
+a3k,evalmi_baseline_qf_2,10,0.869121,0.913089,12
+a3k,evalmi_baseline_qf_2,20,0.880226,0.918341,4

@@ -1,5 +1,5 @@
 """
-Modular TTA evaluation for IQA datasets (A3K, A20K, EvalMI).
+Modular TTA evaluation for IQA datasets (A3K, A20K, EvalMI, KonIQ-10k).
 
 Usage:
     # Baseline (no TTA)
@@ -31,7 +31,7 @@ from lavis.models import load_model_and_preprocess
 
 # Ensure tta_framework is importable
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tta_framework import LOSS_REGISTRY, TTAEngine
+from tta_framework import LOSS_REGISTRY, TTAEngine, PROJ_INIT_REGISTRY
 from tta_framework.param_strategy import print_param_summary
 
 # ── Paths ──────────────────────────────────────────────────────────────────
@@ -85,6 +85,17 @@ DATASET_CONFIGS = {
         "desc_col": "gen_answer", "gt_col": "gt_score",
         "embed_ext": ".npz", "embed_load": "npz",
         "img_subdir": True,
+    },
+    "koniq10k": {
+        "single_csv": "/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/archive/koniq10k_distributions_sets.csv",
+        "split_col": "set",
+        "split_map": {"train": "training", "val": "validation", "test": "test"},
+        "embed_root": "/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/dataset/embeddings/koniq10k",
+        "img_root":   "/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/archive/512x384",
+        "img_col": "image_name", "prompt_col": None,
+        "desc_col": None, "gt_col": "MOS",
+        "embed_ext": ".npy", "embed_load": "npy",
+        "img_subdir": False,   # flat directory
     },
 }
 
@@ -183,12 +194,23 @@ class QformerWrapper(nn.Module):
 
 # ── Dataset ────────────────────────────────────────────────────────────────
 class TTADataset(Dataset):
-    """Loads precomputed embeds + optionally raw images for augmentation."""
-    def __init__(self, csv_path, cfg, load_raw_images=False):
+    """Loads precomputed embeds + optionally raw images for augmentation.
+    
+    Supports two CSV modes:
+      1. Per-split CSVs (a3k, a20k, evalmi): csv_path points to a split-specific file.
+      2. Single CSV with split column (koniq10k): csv_path is the master CSV,
+         filtered by split_filter using cfg["split_col"] and cfg["split_map"].
+    """
+    def __init__(self, csv_path, cfg, load_raw_images=False, split_filter=None):
         self.df = pd.read_csv(csv_path)
         self.df.columns = self.df.columns.str.strip()
         self.cfg = cfg
         self.load_raw = load_raw_images
+
+        # Filter by split if using single-CSV mode
+        if split_filter is not None and "split_col" in cfg:
+            split_val = cfg.get("split_map", {}).get(split_filter, split_filter)
+            self.df = self.df[self.df[cfg["split_col"]] == split_val].reset_index(drop=True)
 
         # Build image lookup for raw images
         if self.load_raw:
@@ -232,15 +254,22 @@ class TTADataset(Dataset):
         img_name = str(row[self.cfg["img_col"]])
 
         # Load precomputed embedding
-        base = img_name.replace(".png", self.cfg["embed_ext"]).replace(".jpg", self.cfg["embed_ext"])
+        base = img_name.replace(".png", self.cfg["embed_ext"]).replace(".jpg", self.cfg["embed_ext"]).replace(".jpeg", self.cfg["embed_ext"])
         embed_path = os.path.join(self.cfg["embed_root"], base)
         if self.cfg["embed_load"] == "npy":
             image_embeds = torch.from_numpy(np.load(embed_path)).float()
         else:
             image_embeds = torch.from_numpy(np.load(embed_path)["embed"]).float()
 
-        prompt = str(row[self.cfg["prompt_col"]])
-        desc = str(row.get(self.cfg["desc_col"], ""))
+        # Handle datasets without prompts/descriptions (e.g. KonIQ-10k)
+        if self.cfg["prompt_col"] is not None:
+            prompt = str(row[self.cfg["prompt_col"]])
+        else:
+            prompt = ""
+        if self.cfg["desc_col"] is not None:
+            desc = str(row.get(self.cfg["desc_col"], ""))
+        else:
+            desc = ""
         gt = torch.tensor(float(row[self.cfg["gt_col"]]), dtype=torch.float32)
 
         out = {
@@ -311,7 +340,7 @@ def main():
     parser.add_argument("--dataset", type=str, required=True, choices=list(DATASET_CONFIGS.keys()))
     parser.add_argument("--losses", nargs="*", default=[], choices=list(LOSS_REGISTRY.keys()),
                         help="TTA losses to apply. Empty = baseline only.")
-    parser.add_argument("--unfreeze", type=str, default="layernorm", choices=["none", "layernorm", "query", "both"])
+    parser.add_argument("--unfreeze", type=str, default="layernorm", choices=["none", "layernorm", "self_attn_ln", "query", "both"])
     parser.add_argument("--tta_steps", type=int, default=3)
     parser.add_argument("--tta_lr", type=float, default=1e-3)
     parser.add_argument("--temperature", type=float, default=0.5, help="Temperature for contrastive losses")
@@ -319,6 +348,15 @@ def main():
                         help="Keep projection head frozen during TTA (matches original)")
     parser.add_argument("--update_proj_head", dest="freeze_proj_head", action="store_false",
                         help="Allow projection head to be updated during TTA")
+    parser.add_argument("--proj_init", type=str, default="random",
+                        choices=["random", "identity", "orthogonal",
+                                 "jl_gaussian", "jl_sparse", "jl_rademacher"],
+                        help="Initialization strategy for the projection head. "
+                             "'jl_*' variants satisfy JL-lemma constraints (μ=0, σ²=1/p).")
+    parser.add_argument("--warmup_steps", type=int, default=0,
+                        help="Number of initial TTA steps to train ONLY the projection head (backbone frozen)")
+    parser.add_argument("--ema_decay", type=float, default=0.0,
+                        help="EMA decay factor for the projection head (e.g., 0.99). 0 means disabled.")
     parser.add_argument("--checkpoint", type=str, default=DEFAULT_CHECKPOINT)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--num_workers", type=int, default=4)
@@ -351,6 +389,9 @@ def main():
     print(f"  Unfreeze:   {args.unfreeze}")
     print(f"  TTA steps:  {args.tta_steps}")
     print(f"  TTA LR:     {args.tta_lr}")
+    print(f"  Proj Init:  {args.proj_init}")
+    print(f"  Warmup:     {args.warmup_steps} steps")
+    print(f"  EMA Decay:  {args.ema_decay}")
     print(f"  Batch size: {args.batch_size}")
     print(f"  Output:     {args.output_dir}")
     print("=" * 60)
@@ -363,6 +404,11 @@ def main():
     qformer = QformerWrapper(device=device, is_eval=True, keep_vit=keep_vit).to(device)
     regressor = Regressor(input_dim=768, output_dim=1).to(device)
     proj_head = ProjectionHead(input_dim=768, output_dim=128).to(device)
+
+    # Strategy 1: Projection Head Initialization
+    if args.proj_init != "random":
+        print(f"Applying {args.proj_init} initialization to projection head...")
+        PROJ_INIT_REGISTRY[args.proj_init](proj_head)
 
     print(f"Loading checkpoint: {args.checkpoint}")
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
@@ -377,21 +423,39 @@ def main():
     vgg = VGGFeatureExtractor(device) if needs_vgg else None
 
     # ── Datasets ──
-    if args.split == "all":
-        split_csvs = cfg["splits"]
+    is_single_csv = "single_csv" in cfg
+    if is_single_csv:
+        # Single CSV with split column (e.g. KonIQ-10k)
+        master_csv = cfg["single_csv"]
+        if args.split == "all":
+            split_names = list(cfg.get("split_map", {"train": "train", "val": "val", "test": "test"}).keys())
+        else:
+            split_names = [args.split]
     else:
-        split_csvs = {args.split: cfg["splits"][args.split]}
+        # Separate per-split CSVs
+        if args.split == "all":
+            split_csvs = cfg["splits"]
+        else:
+            split_csvs = {args.split: cfg["splits"][args.split]}
 
     # ── Evaluate each split ──
     summary_rows = []
     combined_preds, combined_gts, combined_dfs = [], [], []
 
-    for split_name, csv_path in split_csvs.items():
+    iter_items = split_names if is_single_csv else split_csvs.items()
+    for item in iter_items:
+        if is_single_csv:
+            split_name = item
+            csv_path = master_csv
+        else:
+            split_name, csv_path = item
+
         print(f"\n{'='*60}")
         print(f"  Split: {split_name.upper()}  |  CSV: {csv_path}")
         print(f"{'='*60}")
 
-        ds = TTADataset(csv_path, cfg, load_raw_images=needs_raw)
+        ds = TTADataset(csv_path, cfg, load_raw_images=needs_raw,
+                        split_filter=split_name if is_single_csv else None)
         loader = DataLoader(ds, batch_size=args.batch_size, shuffle=False,
                             collate_fn=collate_fn, num_workers=args.num_workers, pin_memory=True)
         print(f"  Samples: {len(ds)}")
@@ -421,7 +485,8 @@ def main():
                 else:
                     losses.append(cls())
 
-            if split_name == list(split_csvs.keys())[0]:
+            first_split = split_names[0] if is_single_csv else list(split_csvs.keys())[0]
+            if split_name == first_split:
                 print_param_summary(qformer, args.unfreeze)
 
             engine = TTAEngine(
@@ -430,6 +495,8 @@ def main():
                 tta_steps=args.tta_steps, tta_lr=args.tta_lr,
                 freeze_proj_head=args.freeze_proj_head,
                 vgg_extractor=vgg, device=device,
+                warmup_proj_steps=args.warmup_steps,
+                ema_decay=args.ema_decay,
             )
 
             preds_tta, gts_tta, df_tta = run_evaluation(

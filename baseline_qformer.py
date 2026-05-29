@@ -82,7 +82,19 @@ PROMPT_COL = "prompt"
 DESC_COL   = "gen_answer"   # change if your csv uses a different name
 GT_COL     = "gt_score"
 
-EMBED_ROOT = "/media/parth/Balance/parth/dataset/embeddings"  # directory with precomputed .npz files
+EMBED_ROOT = "/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/dataset/embeddings/evalmi"  # directory with precomputed .npz files
+
+# ── Paths to the curated "important split files" CSVs ──
+_SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+_SPLIT_DIR   = os.path.join(
+    _SCRIPT_DIR,
+    "important split files-20260527T062853Z-3-001",
+    "important split files",
+)
+
+TRAIN_CSV = os.path.join(_SPLIT_DIR, "Evalmi_new", "evalmi_train_full_gen_responses_PT1.csv")
+VAL_CSV   = os.path.join(_SPLIT_DIR, "Evalmi_new", "evalmi_val_full_gen_responses_PT1.csv")
+TEST_CSV  = os.path.join(_SPLIT_DIR, "Evalmi_new", "evalmi_test_full_gen_responses_PT1.csv")
 
 class QFormerEmbeddingDataset(Dataset):
     """Loads precomputed ViT embeddings instead of raw images."""
@@ -264,7 +276,8 @@ def train_one_epoch(dataloader):
     regressor.train()
 
     total_loss = 0.0
-    for batch in tqdm(dataloader, total=len(dataloader), desc="Training qformer"):
+    pbar = tqdm(dataloader, total=len(dataloader), desc="Training qformer")
+    for step, batch in enumerate(pbar, 1):
         image_embeds = batch["image_embeds"].to(device)
         prompts = batch["prompts"]
         descs = batch["descs"]
@@ -282,6 +295,7 @@ def train_one_epoch(dataloader):
         optimizer.step()
 
         total_loss += float(loss.detach().item())
+        pbar.set_postfix(loss=f"{total_loss / step:.6f}")
 
     return total_loss / max(1, len(dataloader))
 
@@ -348,32 +362,35 @@ def evaluate_and_save_df(dataloader, output_csv_path=None, desc_tag="Evaluating"
 ##### ----------------- ####
 def main():
     print("PRETRAINING OF BASELINE QFORMER ON EVALMI DATABASE (using precomputed embeddings)")
-    train_dataset = QFormerEmbeddingDataset(
-        csv_path="../EvalMi-50K/evalmi_train.csv",
-    )
+    print(f"  Train CSV: {TRAIN_CSV}")
+    print(f"  Val CSV:   {VAL_CSV}")
+    print(f"  Test CSV:  {TEST_CSV}")
+    print(f"  Embed root: {EMBED_ROOT}")
+
+    train_dataset = QFormerEmbeddingDataset(csv_path=TRAIN_CSV)
     train_dataloader = DataLoader(
         train_dataset, batch_size=16, shuffle=True, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
-    val_dataset = QFormerEmbeddingDataset(
-        csv_path="../EvalMi-50K/evalmi_val.csv",
-    )
+    val_dataset = QFormerEmbeddingDataset(csv_path=VAL_CSV)
     val_dataloader = DataLoader(
         val_dataset, batch_size=16, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
-    test_dataset = QFormerEmbeddingDataset(
-        csv_path="../EvalMi-50K/evalmi_test.csv",
-    )
+    test_dataset = QFormerEmbeddingDataset(csv_path=TEST_CSV)
     test_dataloader = DataLoader(
         test_dataset, batch_size=16, shuffle=False, collate_fn=collate_fn, num_workers=4, pin_memory=True,
     )
 
-    checkpoint_path = "./checkpoints/evalmi_b.pth"
+    print(f"  Train samples: {len(train_dataset)}")
+    print(f"  Val samples:   {len(val_dataset)}")
+    print(f"  Test samples:  {len(test_dataset)}")
+
+    checkpoint_path = "./checkpoints/evalmi_baseline_qf.pth"
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
     best_srcc, best_test_srcc = -1.0, -1.0
-    test_out_csv = "./results/evalmi_baseline_qf_test_ver2.csv"
+    test_out_csv = "./results/evalmi_baseline_qf_test.csv"
 
     num_epochs = 15
     for epoch in tqdm(range(num_epochs), desc="Epochs", total=num_epochs):

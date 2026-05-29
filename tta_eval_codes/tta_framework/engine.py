@@ -8,6 +8,10 @@ Handles:
   - Optimizer setup for unfrozen parameters
   - Multi-step TTA optimization
   - Final clean prediction
+
+Stabilization strategies (enabled via CLI flags):
+  - Warmup (staged TTA):  first N steps only train projection head
+  - EMA projection head:  temporally smoothed projections for stability
 """
 
 import torch
@@ -16,6 +20,7 @@ import torch.optim as optim
 
 from .param_strategy import get_tta_params, freeze_all_except
 from .augmentations import create_all_augmentations
+from .strategies import EMAProjectionHead
 
 
 class TTAEngine:
@@ -32,6 +37,8 @@ class TTAEngine:
         tta_lr:           Learning rate for TTA optimizer
         freeze_proj_head: If True, projection head is NOT updated during TTA
         vgg_extractor:    VGGFeatureExtractor (loaded only if any loss requires VGG)
+        warmup_proj_steps: First N steps only train proj head (backbone frozen)
+        ema_decay:        EMA decay factor (0 = disabled, 0.99 typical)
         device:           torch.device
     """
 
@@ -46,6 +53,8 @@ class TTAEngine:
         tta_lr: float = 1e-3,
         freeze_proj_head: bool = True,
         vgg_extractor=None,
+        warmup_proj_steps: int = 0,
+        ema_decay: float = 0.0,
         device=None,
     ):
         self.qformer = qformer
@@ -57,7 +66,12 @@ class TTAEngine:
         self.tta_lr = tta_lr
         self.freeze_proj_head = freeze_proj_head
         self.vgg_extractor = vgg_extractor
+        self.warmup_proj_steps = warmup_proj_steps
+        self.ema_decay = ema_decay
         self.device = device or torch.device("cuda:0")
+
+        if self.warmup_proj_steps > 0:
+            print(f"\n[TTA INFO] Warmup enabled: First {self.warmup_proj_steps} TTA steps will train ONLY the projection head.")
 
         # Determine what the selected losses need
         self.needs_augmentations = any(l.requires_augmentations for l in losses)
@@ -68,6 +82,11 @@ class TTAEngine:
                 "One or more selected losses require VGG features, "
                 "but no VGGFeatureExtractor was provided."
             )
+
+        # EMA projection head (Strategy 4)
+        self.ema = None
+        if self.ema_decay > 0:
+            self.ema = EMAProjectionHead(proj_head, decay=self.ema_decay)
 
         # Snapshot the original model state for reset
         self._snapshot_state()
@@ -107,6 +126,10 @@ class TTAEngine:
             # Reset proj_head too if we're updating it
             if not self.freeze_proj_head:
                 self.proj_head.load_state_dict(self._orig_proj_head)
+
+            # Re-sync EMA to match the reset student
+            if self.ema is not None:
+                self.ema.reset_from(self.proj_head)
 
     def _adaptive_distortion_selection(self, clip_images, old_preds):
         """
@@ -223,7 +246,7 @@ class TTAEngine:
         return preds_np, gt_np, metadata
 
     def _run_tta(self, batch, image_embeds, prompts, descs):
-        """Execute TTA optimization steps."""
+        """Execute TTA optimization steps (with optional warmup and EMA)."""
 
         # --- Get initial predictions (detached) for GC/FAGC clustering ---
         with torch.no_grad():
@@ -253,7 +276,69 @@ class TTAEngine:
                 )
             vgg_feats = self.vgg_extractor(batch["vgg_images"])
 
-        # --- Setup optimizer ---
+        # --- Determine total steps ---
+        total_steps = self.tta_steps
+
+        # --- Reset adaptive rank counters if present ---
+        for loss_fn in self.losses:
+            if hasattr(loss_fn, "reset_counters"):
+                loss_fn.reset_counters()
+
+        # ====================================================================
+        # Phase 1: Warmup — only proj head is trained (backbone frozen)
+        #          (Strategy 3: Staged TTA)
+        # ====================================================================
+        if self.warmup_proj_steps > 0:
+            warmup_steps = min(self.warmup_proj_steps, total_steps)
+
+            # Freeze everything in qformer, only proj head params
+            freeze_all_except(self.qformer, [])
+            for p in self.qformer.parameters():
+                p.requires_grad = False
+
+            warmup_params = list(self.proj_head.parameters())
+            for p in warmup_params:
+                p.requires_grad = True
+
+            warmup_optimizer = optim.Adam(warmup_params, lr=self.tta_lr)
+
+            self.proj_head.train()
+
+            for step in range(warmup_steps):
+                warmup_optimizer.zero_grad()
+                with torch.no_grad():
+                    mm_embeds = self.qformer.forward_qformer(image_embeds, prompts, descs)
+                proj_feats = self.proj_head(mm_embeds)
+
+                ctx = self._build_ctx(
+                    proj_feats, init_preds, mm_embeds,
+                    embeds_weak, embeds_strong, vgg_feats, prompts, descs,
+                )
+
+                total_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+                for loss_fn in self.losses:
+                    total_loss = total_loss + loss_fn(ctx)
+
+                if total_loss.item() > 0:
+                    total_loss.backward()
+                    warmup_optimizer.step()
+
+                # Update EMA after each step if enabled
+                if self.ema is not None:
+                    self.ema.update(self.proj_head)
+
+            # Reduce remaining steps
+            total_steps = total_steps - warmup_steps
+
+        # ====================================================================
+        # Phase 2: Full TTA — backbone + proj head
+        # ====================================================================
+        if total_steps <= 0:
+            self.qformer.eval()
+            self.proj_head.eval()
+            return
+
+        # Setup optimizer for backbone params
         params_to_update = get_tta_params(self.qformer, self.unfreeze_strategy)
         freeze_all_except(self.qformer, params_to_update)
 
@@ -273,39 +358,23 @@ class TTAEngine:
 
         optimizer = optim.Adam(all_params, lr=self.tta_lr)
 
-        # Reset adaptive rank counters if present
-        for loss_fn in self.losses:
-            if hasattr(loss_fn, "reset_counters"):
-                loss_fn.reset_counters()
-
         # --- TTA optimization loop ---
         self.qformer.train()
         if not self.freeze_proj_head:
             self.proj_head.train()
 
-        for step in range(self.tta_steps):
+        for step in range(total_steps):
             optimizer.zero_grad()
 
             # Forward pass
             mm_embeds = self.qformer.forward_qformer(image_embeds, prompts, descs)
             proj_feats = self.proj_head(mm_embeds)
 
-            # Build context
-            ctx = {
-                "proj_feats": proj_feats,
-                "predictions": init_preds,
-                "device": self.device,
-            }
-
-            # Add augmented features if needed
-            if embeds_weak is not None:
-                mm_weak = self.qformer.forward_qformer(embeds_weak, prompts, descs)
-                mm_strong = self.qformer.forward_qformer(embeds_strong, prompts, descs)
-                ctx["proj_feats_weak"] = self.proj_head(mm_weak)
-                ctx["proj_feats_strong"] = self.proj_head(mm_strong)
-
-            if vgg_feats is not None:
-                ctx["vgg_feats"] = vgg_feats
+            # Build context (includes EMA projections if enabled)
+            ctx = self._build_ctx(
+                proj_feats, init_preds, mm_embeds,
+                embeds_weak, embeds_strong, vgg_feats, prompts, descs,
+            )
 
             # Compute total loss
             total_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
@@ -317,5 +386,36 @@ class TTAEngine:
                 total_loss.backward()
                 optimizer.step()
 
+            # Update EMA after each optimizer step (Strategy 4)
+            if self.ema is not None:
+                self.ema.update(self.proj_head)
+
         self.qformer.eval()
         self.proj_head.eval()
+
+    def _build_ctx(
+        self, proj_feats, init_preds, mm_embeds,
+        embeds_weak, embeds_strong, vgg_feats, prompts, descs,
+    ):
+        """Build the loss context dict, including EMA projections if enabled."""
+        ctx = {
+            "proj_feats": proj_feats,
+            "predictions": init_preds,
+            "device": self.device,
+        }
+
+        # Add augmented features if needed
+        if embeds_weak is not None:
+            mm_weak = self.qformer.forward_qformer(embeds_weak, prompts, descs)
+            mm_strong = self.qformer.forward_qformer(embeds_strong, prompts, descs)
+            ctx["proj_feats_weak"] = self.proj_head(mm_weak)
+            ctx["proj_feats_strong"] = self.proj_head(mm_strong)
+
+        if vgg_feats is not None:
+            ctx["vgg_feats"] = vgg_feats
+
+        # Add EMA projections (Strategy 4)
+        if self.ema is not None:
+            ctx["ema_proj_feats"] = self.ema.forward(mm_embeds.detach())
+
+        return ctx

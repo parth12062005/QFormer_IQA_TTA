@@ -301,11 +301,45 @@ class AdaptiveRankLoss(TTALoss):
 
 
 # ---------------------------------------------------------------------------
+#  5) EMA Consistency Loss
+#     Penalizes divergence between the student projection and the temporally
+#     smoothed EMA projection.  Acts as a regularizer that prevents the
+#     projection space from drifting too far in any single TTA step.
+#     Requires --ema_decay > 0 so that 'ema_proj_feats' is in the context.
+# ---------------------------------------------------------------------------
+class EMAConsistencyLoss(TTALoss):
+    """
+    MSE consistency loss between student and EMA projections.
+
+    L = ||z_student - z_ema||^2
+
+    Only active when the engine populates 'ema_proj_feats' in the context
+    (i.e. --ema_decay is set to a non-zero value).
+    """
+    name = "ema_consistency"
+    requires_augmentations = False
+    requires_vgg = False
+
+    def __init__(self, weight: float = 1.0):
+        self.weight = weight
+
+    def __call__(self, ctx: dict) -> torch.Tensor:
+        device = ctx["device"]
+        if "ema_proj_feats" not in ctx:
+            return torch.tensor(0.0, device=device, requires_grad=True)
+
+        student = ctx["proj_feats"]           # (B, D) — has grad
+        ema     = ctx["ema_proj_feats"]       # (B, D) — detached
+        return self.weight * F.mse_loss(student, ema)
+
+
+# ---------------------------------------------------------------------------
 #  Registry for CLI lookup
 # ---------------------------------------------------------------------------
 LOSS_REGISTRY = {
-    "gc":            GCLoss,
-    "rank":          RankLoss,
-    "fagc":          FAGCLoss,
-    "adaptive_rank": AdaptiveRankLoss,
+    "gc":              GCLoss,
+    "rank":            RankLoss,
+    "fagc":            FAGCLoss,
+    "adaptive_rank":   AdaptiveRankLoss,
+    "ema_consistency": EMAConsistencyLoss,
 }

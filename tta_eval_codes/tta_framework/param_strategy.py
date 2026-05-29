@@ -19,13 +19,30 @@ def get_layernorm_params(qformer_module):
     return ln_params
 
 
+def get_self_attention_layernorm_params(qformer_module):
+    """Collect only self-attention LayerNorm weight/bias parameters from the Q-Former."""
+    ln_params = []
+    for name, module in qformer_module.named_modules():
+        if isinstance(module, nn.LayerNorm):
+            # Self-attention LayerNorms are typically in 'attention.output.LayerNorm'
+            # Cross-attention LayerNorms are in 'crossattention.output.LayerNorm'
+            # Feed-forward LayerNorms are in 'output.LayerNorm'
+            if name.endswith('attention.output.LayerNorm') and not name.endswith('crossattention.output.LayerNorm'):
+                if module.weight is not None:
+                    ln_params.append(module.weight)
+                if module.bias is not None:
+                    ln_params.append(module.bias)
+    return ln_params
+
+
+
 def get_tta_params(qformer_wrapper, strategy: str):
     """
     Return the list of parameters to unfreeze for TTA.
 
     Args:
         qformer_wrapper: QformerWrapper instance (has .model with .query_tokens and .Qformer)
-        strategy: one of "layernorm", "query", "both"
+        strategy: one of "layernorm", "self_attn_ln", "query", "both"
 
     Returns:
         List of nn.Parameter objects to optimize.
@@ -36,12 +53,14 @@ def get_tta_params(qformer_wrapper, strategy: str):
         return []
     elif strategy == "layernorm":
         return get_layernorm_params(qformer_wrapper.model.Qformer)
+    elif strategy == "self_attn_ln":
+        return get_self_attention_layernorm_params(qformer_wrapper.model.Qformer)
     elif strategy == "query":
         return [qformer_wrapper.model.query_tokens]
     elif strategy == "both":
         return [qformer_wrapper.model.query_tokens] + get_layernorm_params(qformer_wrapper.model.Qformer)
     else:
-        raise ValueError(f"Unknown unfreeze strategy: '{strategy}'. Choose from: none, layernorm, query, both")
+        raise ValueError(f"Unknown unfreeze strategy: '{strategy}'. Choose from: none, layernorm, self_attn_ln, query, both")
 
 
 def freeze_all_except(qformer_wrapper, params_to_update):
@@ -75,6 +94,13 @@ def print_param_summary(qformer_wrapper, strategy: str):
         ln_params = get_layernorm_params(qformer_wrapper.model.Qformer)
         ln_count = sum(1 for m in qformer_wrapper.model.Qformer.modules() if isinstance(m, nn.LayerNorm))
         ln_total = sum(p.numel() for p in ln_params)
-        print(f"  - Q-Former LayerNorms ({ln_count} layers): {ln_total} params")
+        print(f"  - All Q-Former LayerNorms ({ln_count} layers): {ln_total} params")
+
+    if strategy == "self_attn_ln":
+        ln_params = get_self_attention_layernorm_params(qformer_wrapper.model.Qformer)
+        # Count the number of LayerNorm objects involved (number of tensors / 2 usually, since weight+bias)
+        ln_count = len(ln_params) // 2
+        ln_total = sum(p.numel() for p in ln_params)
+        print(f"  - Self-Attention LayerNorms ({ln_count} layers): {ln_total} params")
 
     print(f"  Total params updated per TTA step: {total}\n")
