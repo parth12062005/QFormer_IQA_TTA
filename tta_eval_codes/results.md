@@ -38,3 +38,42 @@ This document summarizes the cross-database performance of a Q-Former model pre-
 3. **Linear vs MLP:** The **MLP** regressor generally outperforms the Linear regressor under few-shot conditions, especially on A3K where it hits the highest overall score of `0.8802` SRCC at a 20% data fraction. However, the Linear regressor is slightly more stable in Zero-Shot performance on A20K.
 
 All detailed logs and the comprehensive CSV are located in `results/finetune_all_results.csv`.
+
+## Parameter Change Analysis (20% Fine-Tuning)
+
+To understand which parts of the network drive the few-shot adaptation, we trained both checkpoints on 20% of the data and calculated the relative average absolute change (`avg(abs(trained - orig)) / avg(abs(orig))`) for every layer. 
+
+The results reveal a powerful and consistent pattern across **all combinations** of datasets and architectures. The parameters that undergo the most dramatic changes are heavily concentrated in the **bias terms of the cross-attention query and value projections**, particularly in the early-to-mid layers of the Q-Former.
+
+### Top 5 Most Changed Layers (Relative)
+
+**AIGIQA-20K (Linear Regressor)**
+1. `encoder.layer.6.crossattention.self.query.bias` (11.80% change)
+2. `encoder.layer.0.crossattention.self.query.bias` (11.26% change)
+3. `embeddings.position_embeddings.weight` (10.80% change)
+4. `encoder.layer.8.crossattention.self.query.bias` (8.38% change)
+5. `encoder.layer.10.crossattention.self.key.weight` (8.15% change)
+
+**AIGIQA-20K (MLP Regressor)**
+1. `encoder.layer.0.crossattention.self.query.bias` (15.74% change)
+2. `encoder.layer.6.crossattention.self.query.bias` (14.81% change)
+3. `encoder.layer.2.crossattention.self.query.bias` (11.97% change)
+4. `encoder.layer.0.crossattention.self.value.bias` (11.71% change)
+5. `encoder.layer.4.crossattention.self.query.bias` (11.12% change)
+
+**AGIQA-3K (Linear Regressor)**
+1. `encoder.layer.0.crossattention.self.query.bias` (8.19% change)
+2. `encoder.layer.0.crossattention.self.value.bias` (6.57% change)
+3. `encoder.layer.6.crossattention.self.query.bias` (6.56% change)
+4. `encoder.layer.2.crossattention.self.query.bias` (6.26% change)
+5. `encoder.layer.4.crossattention.self.query.bias` (5.36% change)
+
+**AGIQA-3K (MLP Regressor)**
+1. `encoder.layer.0.crossattention.self.query.bias` (8.11% change)
+2. `encoder.layer.8.crossattention.self.value.bias` (7.88% change)
+3. `encoder.layer.4.crossattention.self.value.bias` (7.66% change)
+4. `encoder.layer.0.crossattention.self.value.bias` (7.66% change)
+5. `encoder.layer.6.crossattention.self.query.bias` (7.08% change)
+
+> [!TIP]
+> **Implications for TTA:** This provides massive insight for Test-Time Adaptation! Instead of updating the `LayerNorms` or the raw `query_tokens`, the model naturally prefers adapting the **cross-attention query/value biases** (especially in layers 0, 2, 4, 6) when bridging domain gaps. Targeting these specific bias parameters during TTA could yield dramatic stability and efficiency improvements compared to full network tuning.
