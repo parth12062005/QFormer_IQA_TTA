@@ -1,0 +1,2 @@
+dataset,dataset_name,checkpoint,regressor_type,fraction,fraction_pct,train_total,train_used,test_samples,best_epoch,best_val_srcc,test_srcc,test_plcc,lr,epochs,batch_size,seed
+a20k,AIGIQA-20K,evalmi_baseline_qf_2.pth,mlp,0.2,20,9788,1958,2815,11,0.858637141386778,0.8629401894463031,0.9004804785467414,0.0001,15,16,1234

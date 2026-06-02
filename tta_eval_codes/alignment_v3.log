@@ -1,0 +1,57 @@
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/timm/models/hub.py:4: FutureWarning: Importing from timm.models.hub is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/timm/models/registry.py:4: FutureWarning: Importing from timm.models.registry is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/timm/models/helpers.py:7: FutureWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/fairscale/experimental/nn/offload.py:19: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  return torch.cuda.amp.custom_fwd(orig_func)  # type: ignore
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/fairscale/experimental/nn/offload.py:30: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+  return torch.cuda.amp.custom_bwd(orig_func)  # type: ignore
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py:189: UserWarning: The `resume_download` argument is deprecated and ignored in `hf_hub_download`. Downloads always resume whenever possible.
+  warnings.warn(
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/lavis/models/eva_vit.py:433: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  state_dict = torch.load(cached_file, map_location="cpu")
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/lavis/models/blip2_models/blip2.py:85: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  checkpoint = torch.load(cached_file, map_location="cpu")
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/QFormer_IQA_TTA/tta_eval_codes/analyze_gradient_alignment.py:185: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  oracle_grads_list = torch.load(GRADIENT_FILE, map_location="cpu")
+Loading image paths...
+Loading dataset...
+Loading model...
+Loading saved Oracle gradients...
+Starting analysis on first 30 batches...
+Batch 1: Oracle Match Diff = 0.031319, TTA Cosine Sim = 0.1341
+Batch 2: Oracle Match Diff = 0.027364, TTA Cosine Sim = -0.0136
+Batch 3: Oracle Match Diff = 0.041844, TTA Cosine Sim = -0.0712
+Batch 4: Oracle Match Diff = 0.060668, TTA Cosine Sim = -0.0669
+Batch 5: Oracle Match Diff = 0.079838, TTA Cosine Sim = 0.1080
+Batch 6: Oracle Match Diff = 0.099614, TTA Cosine Sim = 0.2050
+Batch 7: Oracle Match Diff = 0.113580, TTA Cosine Sim = -0.0756
+Batch 8: Oracle Match Diff = 0.149722, TTA Cosine Sim = 0.1001
+Batch 9: Oracle Match Diff = 0.173486, TTA Cosine Sim = 0.0467
+Batch 10: Oracle Match Diff = 0.182108, TTA Cosine Sim = 0.2068
+Batch 11: Oracle Match Diff = 0.212186, TTA Cosine Sim = 0.2034
+Batch 12: Oracle Match Diff = 0.222392, TTA Cosine Sim = 0.1591
+Batch 13: Oracle Match Diff = 0.248762, TTA Cosine Sim = -0.0163
+Batch 14: Oracle Match Diff = 0.281619, TTA Cosine Sim = -0.0840
+Batch 15: Oracle Match Diff = 0.304995, TTA Cosine Sim = 0.1512
+Batch 16: Oracle Match Diff = 0.330192, TTA Cosine Sim = 0.0182
+Batch 17: Oracle Match Diff = 0.329469, TTA Cosine Sim = 0.0781
+Batch 18: Oracle Match Diff = 0.351204, TTA Cosine Sim = 0.1617
+Batch 19: Oracle Match Diff = 0.391807, TTA Cosine Sim = 0.2032
+Batch 20: Oracle Match Diff = 0.380653, TTA Cosine Sim = 0.0401
+Batch 21: Oracle Match Diff = 0.422257, TTA Cosine Sim = 0.1586
+Batch 22: Oracle Match Diff = 0.423922, TTA Cosine Sim = 0.0905
+Batch 23: Oracle Match Diff = 0.463538, TTA Cosine Sim = 0.0899
+Batch 24: Oracle Match Diff = 0.469618, TTA Cosine Sim = 0.0122
+Batch 25: Oracle Match Diff = 0.478774, TTA Cosine Sim = 0.1671
+Batch 26: Oracle Match Diff = 0.481577, TTA Cosine Sim = 0.1317
+Batch 27: Oracle Match Diff = 0.517577, TTA Cosine Sim = -0.0325
+Batch 28: Oracle Match Diff = 0.510931, TTA Cosine Sim = 0.1733
+Batch 29: Oracle Match Diff = 0.544240, TTA Cosine Sim = 0.0590
+Batch 30: Oracle Match Diff = 0.553505, TTA Cosine Sim = -0.0511
+
+Average Cosine Similarity (first 30 batches): 0.0762

@@ -1,0 +1,189 @@
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/timm/models/hub.py:4: FutureWarning: Importing from timm.models.hub is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/timm/models/registry.py:4: FutureWarning: Importing from timm.models.registry is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/timm/models/helpers.py:7: FutureWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/fairscale/experimental/nn/offload.py:19: FutureWarning: `torch.cuda.amp.custom_fwd(args...)` is deprecated. Please use `torch.amp.custom_fwd(args..., device_type='cuda')` instead.
+  return torch.cuda.amp.custom_fwd(orig_func)  # type: ignore
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/fairscale/experimental/nn/offload.py:30: FutureWarning: `torch.cuda.amp.custom_bwd(args...)` is deprecated. Please use `torch.amp.custom_bwd(args..., device_type='cuda')` instead.
+  return torch.cuda.amp.custom_bwd(orig_func)  # type: ignore
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py:189: UserWarning: The `resume_download` argument is deprecated and ignored in `hf_hub_download`. Downloads always resume whenever possible.
+  warnings.warn(
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/lavis/models/eva_vit.py:433: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  state_dict = torch.load(cached_file, map_location="cpu")
+/media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/anaconda3/envs/tta/lib/python3.10/site-packages/lavis/models/blip2_models/blip2.py:85: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  checkpoint = torch.load(cached_file, map_location="cpu")
+======================================================================
+  FINE-TUNE & EVALUATE: AGIQA-3K
+  Checkpoint:  /media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/QFormer_IQA_TTA/checkpoints/evalmi_baseline_qf_2.pth
+  Fraction:    0.05 (5%)
+  Epochs:      15
+  LR:          0.0001
+  Batch size:  16
+  Seed:        1234
+  Device:      cuda:0
+  Output dir:  /media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/QFormer_IQA_TTA/tta_eval_codes/results/finetune_a3k_evalmi_baseline_qf_2_5pct
+======================================================================
+
+Loading checkpoint...
+  Regressor type: mlp
+Loading Q-Former model...
+  Checkpoint loaded successfully.
+
+Preparing data (AGIQA-3K)...
+  Train samples (full):    2087
+  Train samples (5%):   104
+  Val samples:             298
+  Test samples:            597
+
+── Epoch 1/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:01<?, ?it/s, loss=0.057753]  Training:  14%|█▍        | 1/7 [00:01<00:09,  1.53s/it, loss=0.057753]  Training:  14%|█▍        | 1/7 [00:01<00:09,  1.53s/it, loss=0.042798]  Training:  29%|██▊       | 2/7 [00:01<00:03,  1.39it/s, loss=0.042798]  Training:  29%|██▊       | 2/7 [00:01<00:03,  1.39it/s, loss=0.033837]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.05it/s, loss=0.033837]  Training:  43%|████▎     | 3/7 [00:02<00:01,  2.05it/s, loss=0.030446]  Training:  57%|█████▋    | 4/7 [00:02<00:01,  2.49it/s, loss=0.030446]  Training:  57%|█████▋    | 4/7 [00:02<00:01,  2.49it/s, loss=0.025654]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  2.81it/s, loss=0.025654]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  2.81it/s, loss=0.024028]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.05it/s, loss=0.024028]  Training:  86%|████████▌ | 6/7 [00:03<00:00,  3.05it/s, loss=0.024279]  Training: 100%|██████████| 7/7 [00:03<00:00,  3.15it/s, loss=0.024279]  Training: 100%|██████████| 7/7 [00:03<00:00,  2.04it/s, loss=0.024279]
+  Train loss: 0.024279
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.12s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.20s/it]
+  Val  SRCC: 0.832758  |  PLCC: 0.880457
+  Test:   0%|          | 0/3 [00:00<?, ?it/s]  Test:  33%|███▎      | 1/3 [00:02<00:05,  2.74s/it]  Test:  67%|██████▋   | 2/3 [00:03<00:01,  1.48s/it]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.12it/s]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.28s/it]
+  ★ New best! Test SRCC: 0.828792  |  PLCC: 0.878464
+  Best val SRCC:  0.832758
+  Best test SRCC: 0.828792  |  PLCC: 0.878464  (epoch 1)
+
+── Epoch 2/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.012333]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.36it/s, loss=0.012333]  Training:  14%|█▍        | 1/7 [00:01<00:04,  1.36it/s, loss=0.011195]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.13it/s, loss=0.011195]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.13it/s, loss=0.009901]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.62it/s, loss=0.009901]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.62it/s, loss=0.008959]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.94it/s, loss=0.008959]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.94it/s, loss=0.008525]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.15it/s, loss=0.008525]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.15it/s, loss=0.009684]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.31it/s, loss=0.009684]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.31it/s, loss=0.008952]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.44it/s, loss=0.008952]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.50it/s, loss=0.008952]
+  Train loss: 0.008952
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.05s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.16s/it]
+  Val  SRCC: 0.850065  |  PLCC: 0.888620
+  Test:   0%|          | 0/3 [00:00<?, ?it/s]  Test:  33%|███▎      | 1/3 [00:02<00:05,  2.66s/it]  Test:  67%|██████▋   | 2/3 [00:03<00:01,  1.42s/it]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.16it/s]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.24s/it]
+  ★ New best! Test SRCC: 0.835254  |  PLCC: 0.879882
+  Best val SRCC:  0.850065
+  Best test SRCC: 0.835254  |  PLCC: 0.879882  (epoch 2)
+
+── Epoch 3/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.006923]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.26it/s, loss=0.006923]  Training:  14%|█▍        | 1/7 [00:01<00:04,  1.26it/s, loss=0.006584]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.05it/s, loss=0.006584]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.05it/s, loss=0.005836]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.56it/s, loss=0.005836]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.56it/s, loss=0.005400]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.91it/s, loss=0.005400]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.91it/s, loss=0.005586]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.15it/s, loss=0.005586]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.15it/s, loss=0.005133]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.32it/s, loss=0.005133]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.32it/s, loss=0.005062]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.45it/s, loss=0.005062]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.46it/s, loss=0.005062]
+  Train loss: 0.005062
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.09s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.20s/it]
+  Val  SRCC: 0.852153  |  PLCC: 0.897541
+  Test:   0%|          | 0/3 [00:00<?, ?it/s]  Test:  33%|███▎      | 1/3 [00:02<00:05,  2.70s/it]  Test:  67%|██████▋   | 2/3 [00:03<00:01,  1.44s/it]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.15it/s]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.25s/it]
+  ★ New best! Test SRCC: 0.841886  |  PLCC: 0.890393
+  Best val SRCC:  0.852153
+  Best test SRCC: 0.841886  |  PLCC: 0.890393  (epoch 3)
+
+── Epoch 4/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.002013]  Training:  14%|█▍        | 1/7 [00:00<00:05,  1.17it/s, loss=0.002013]  Training:  14%|█▍        | 1/7 [00:01<00:05,  1.17it/s, loss=0.002944]  Training:  29%|██▊       | 2/7 [00:01<00:02,  1.96it/s, loss=0.002944]  Training:  29%|██▊       | 2/7 [00:01<00:02,  1.96it/s, loss=0.003694]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.49it/s, loss=0.003694]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.49it/s, loss=0.003395]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.86it/s, loss=0.003395]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.86it/s, loss=0.003056]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.10it/s, loss=0.003056]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.10it/s, loss=0.003263]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.27it/s, loss=0.003263]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.27it/s, loss=0.003193]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.43it/s, loss=0.003193]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.42it/s, loss=0.003193]
+  Train loss: 0.003193
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:01<00:01,  1.96s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.13s/it]
+  Val  SRCC: 0.859316  |  PLCC: 0.902486
+  Test:   0%|          | 0/3 [00:00<?, ?it/s]  Test:  33%|███▎      | 1/3 [00:02<00:05,  2.57s/it]  Test:  67%|██████▋   | 2/3 [00:03<00:01,  1.38s/it]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.19it/s]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.21s/it]
+  ★ New best! Test SRCC: 0.848628  |  PLCC: 0.893892
+  Best val SRCC:  0.859316
+  Best test SRCC: 0.848628  |  PLCC: 0.893892  (epoch 4)
+
+── Epoch 5/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000985]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.34it/s, loss=0.000985]  Training:  14%|█▍        | 1/7 [00:01<00:04,  1.34it/s, loss=0.001295]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.14it/s, loss=0.001295]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.14it/s, loss=0.001767]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.65it/s, loss=0.001767]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.65it/s, loss=0.001674]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.98it/s, loss=0.001674]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.98it/s, loss=0.001733]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.22it/s, loss=0.001733]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.22it/s, loss=0.001719]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.38it/s, loss=0.001719]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.38it/s, loss=0.001628]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.51it/s, loss=0.001628]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.54it/s, loss=0.001628]
+  Train loss: 0.001628
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.05s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.16s/it]
+  Val  SRCC: 0.861892  |  PLCC: 0.891271
+  Test:   0%|          | 0/3 [00:00<?, ?it/s]  Test:  33%|███▎      | 1/3 [00:02<00:05,  2.55s/it]  Test:  67%|██████▋   | 2/3 [00:03<00:01,  1.37s/it]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.20it/s]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.20s/it]
+  ★ New best! Test SRCC: 0.852278  |  PLCC: 0.886306
+  Best val SRCC:  0.861892
+  Best test SRCC: 0.852278  |  PLCC: 0.886306  (epoch 5)
+
+── Epoch 6/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.001371]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.34it/s, loss=0.001371]  Training:  14%|█▍        | 1/7 [00:01<00:04,  1.34it/s, loss=0.000988]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.15it/s, loss=0.000988]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.15it/s, loss=0.000916]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.66it/s, loss=0.000916]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.66it/s, loss=0.000774]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.99it/s, loss=0.000774]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.99it/s, loss=0.000724]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.21it/s, loss=0.000724]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.21it/s, loss=0.000704]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.34it/s, loss=0.000704]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.34it/s, loss=0.000760]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.95it/s, loss=0.000760]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.65it/s, loss=0.000760]
+  Train loss: 0.000760
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.14s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.21s/it]
+  Val  SRCC: 0.865526  |  PLCC: 0.905172
+  Test:   0%|          | 0/3 [00:00<?, ?it/s]  Test:  33%|███▎      | 1/3 [00:02<00:05,  2.64s/it]  Test:  67%|██████▋   | 2/3 [00:03<00:01,  1.41s/it]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.17it/s]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.23s/it]
+  ★ New best! Test SRCC: 0.855039  |  PLCC: 0.897066
+  Best val SRCC:  0.865526
+  Best test SRCC: 0.855039  |  PLCC: 0.897066  (epoch 6)
+
+── Epoch 7/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000281]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.39it/s, loss=0.000281]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.39it/s, loss=0.000260]  Training:  29%|██▊       | 2/7 [00:00<00:02,  2.19it/s, loss=0.000260]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.19it/s, loss=0.000282]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.68it/s, loss=0.000282]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.68it/s, loss=0.000281]  Training:  57%|█████▋    | 4/7 [00:01<00:00,  3.01it/s, loss=0.000281]  Training:  57%|█████▋    | 4/7 [00:01<00:00,  3.01it/s, loss=0.000341]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.22it/s, loss=0.000341]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.22it/s, loss=0.000400]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.37it/s, loss=0.000400]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.37it/s, loss=0.000384]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.50it/s, loss=0.000384]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.54it/s, loss=0.000384]
+  Train loss: 0.000384
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:01<00:01,  1.96s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.09s/it]
+  Val  SRCC: 0.865593  |  PLCC: 0.904621
+  Test:   0%|          | 0/3 [00:00<?, ?it/s]  Test:  33%|███▎      | 1/3 [00:02<00:05,  2.58s/it]  Test:  67%|██████▋   | 2/3 [00:03<00:01,  1.39s/it]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.19it/s]  Test: 100%|██████████| 3/3 [00:03<00:00,  1.21s/it]
+  ★ New best! Test SRCC: 0.857628  |  PLCC: 0.899391
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+── Epoch 8/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000319]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.27it/s, loss=0.000319]  Training:  14%|█▍        | 1/7 [00:01<00:04,  1.27it/s, loss=0.000304]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.07it/s, loss=0.000304]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.07it/s, loss=0.000380]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.58it/s, loss=0.000380]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.58it/s, loss=0.000377]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.93it/s, loss=0.000377]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.93it/s, loss=0.000319]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.15it/s, loss=0.000319]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.15it/s, loss=0.000315]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.31it/s, loss=0.000315]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.31it/s, loss=0.000299]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.46it/s, loss=0.000299]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.48it/s, loss=0.000299]
+  Train loss: 0.000299
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.01s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.15s/it]
+  Val  SRCC: 0.863179  |  PLCC: 0.899014
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+── Epoch 9/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000159]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.23it/s, loss=0.000159]  Training:  14%|█▍        | 1/7 [00:01<00:04,  1.23it/s, loss=0.000143]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.01it/s, loss=0.000143]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.01it/s, loss=0.000161]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.53it/s, loss=0.000161]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.53it/s, loss=0.000194]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.88it/s, loss=0.000194]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.88it/s, loss=0.000176]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.12it/s, loss=0.000176]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.12it/s, loss=0.000188]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.28it/s, loss=0.000188]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.28it/s, loss=0.000197]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.43it/s, loss=0.000197]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.45it/s, loss=0.000197]
+  Train loss: 0.000197
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:01<00:01,  1.72s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.01s/it]
+  Val  SRCC: 0.863479  |  PLCC: 0.901834
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+── Epoch 10/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000164]  Training:  14%|█▍        | 1/7 [00:00<00:05,  1.06it/s, loss=0.000164]  Training:  14%|█▍        | 1/7 [00:01<00:05,  1.06it/s, loss=0.000170]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.13it/s, loss=0.000170]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.13it/s, loss=0.000140]  Training:  43%|████▎     | 3/7 [00:01<00:01,  3.07it/s, loss=0.000140]  Training:  43%|████▎     | 3/7 [00:01<00:01,  3.07it/s, loss=0.000137]  Training:  57%|█████▋    | 4/7 [00:01<00:00,  3.30it/s, loss=0.000137]  Training:  57%|█████▋    | 4/7 [00:01<00:00,  3.30it/s, loss=0.000138]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.44it/s, loss=0.000138]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.44it/s, loss=0.000131]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.52it/s, loss=0.000131]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.52it/s, loss=0.000153]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.61it/s, loss=0.000153]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.58it/s, loss=0.000153]
+  Train loss: 0.000153
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.08s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.18s/it]
+  Val  SRCC: 0.860838  |  PLCC: 0.900555
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+── Epoch 11/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000320]  Training:  14%|█▍        | 1/7 [00:00<00:05,  1.10it/s, loss=0.000320]  Training:  14%|█▍        | 1/7 [00:01<00:05,  1.10it/s, loss=0.000216]  Training:  29%|██▊       | 2/7 [00:01<00:02,  1.86it/s, loss=0.000216]  Training:  29%|██▊       | 2/7 [00:01<00:02,  1.86it/s, loss=0.000171]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.39it/s, loss=0.000171]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.39it/s, loss=0.000157]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.77it/s, loss=0.000157]  Training:  57%|█████▋    | 4/7 [00:02<00:01,  2.77it/s, loss=0.000141]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.02it/s, loss=0.000141]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.02it/s, loss=0.000154]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.22it/s, loss=0.000154]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.22it/s, loss=0.000184]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.38it/s, loss=0.000184]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.36it/s, loss=0.000184]
+  Train loss: 0.000184
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.04s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.13s/it]
+  Val  SRCC: 0.862264  |  PLCC: 0.901914
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+── Epoch 12/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000127]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.47it/s, loss=0.000127]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.47it/s, loss=0.000147]  Training:  29%|██▊       | 2/7 [00:00<00:02,  2.28it/s, loss=0.000147]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.28it/s, loss=0.000122]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.76it/s, loss=0.000122]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.76it/s, loss=0.000120]  Training:  57%|█████▋    | 4/7 [00:01<00:00,  3.06it/s, loss=0.000120]  Training:  57%|█████▋    | 4/7 [00:01<00:00,  3.06it/s, loss=0.000119]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.26it/s, loss=0.000119]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.26it/s, loss=0.000107]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.40it/s, loss=0.000107]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.40it/s, loss=0.000102]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.53it/s, loss=0.000102]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.62it/s, loss=0.000102]
+  Train loss: 0.000102
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.07s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.17s/it]
+  Val  SRCC: 0.862182  |  PLCC: 0.900301
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+── Epoch 13/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000118]  Training:  14%|█▍        | 1/7 [00:00<00:04,  1.20it/s, loss=0.000118]  Training:  14%|█▍        | 1/7 [00:01<00:04,  1.20it/s, loss=0.000117]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.00it/s, loss=0.000117]  Training:  29%|██▊       | 2/7 [00:01<00:02,  2.00it/s, loss=0.000118]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.52it/s, loss=0.000118]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.52it/s, loss=0.000111]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.88it/s, loss=0.000111]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.88it/s, loss=0.000105]  Training:  71%|███████▏  | 5/7 [00:01<00:00,  3.13it/s, loss=0.000105]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.13it/s, loss=0.000101]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.31it/s, loss=0.000101]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.31it/s, loss=0.000101]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.46it/s, loss=0.000101]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.45it/s, loss=0.000101]
+  Train loss: 0.000101
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.10s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.20s/it]
+  Val  SRCC: 0.863777  |  PLCC: 0.903058
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+── Epoch 14/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:01<?, ?it/s, loss=0.000097]  Training:  14%|█▍        | 1/7 [00:01<00:06,  1.02s/it, loss=0.000097]  Training:  14%|█▍        | 1/7 [00:01<00:06,  1.02s/it, loss=0.000070]  Training:  29%|██▊       | 2/7 [00:01<00:02,  1.73it/s, loss=0.000070]  Training:  29%|██▊       | 2/7 [00:01<00:02,  1.73it/s, loss=0.000076]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.29it/s, loss=0.000076]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.29it/s, loss=0.000082]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.70it/s, loss=0.000082]  Training:  57%|█████▋    | 4/7 [00:02<00:01,  2.70it/s, loss=0.000077]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.00it/s, loss=0.000077]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.00it/s, loss=0.000072]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.21it/s, loss=0.000072]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.21it/s, loss=0.000067]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.38it/s, loss=0.000067]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.34it/s, loss=0.000067]
+  Train loss: 0.000067
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.09s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.20s/it]
+  Val  SRCC: 0.863085  |  PLCC: 0.901848
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+── Epoch 15/15 ──
+  Training:   0%|          | 0/7 [00:00<?, ?it/s]  Training:   0%|          | 0/7 [00:00<?, ?it/s, loss=0.000057]  Training:  14%|█▍        | 1/7 [00:00<00:05,  1.08it/s, loss=0.000057]  Training:  14%|█▍        | 1/7 [00:01<00:05,  1.08it/s, loss=0.000051]  Training:  29%|██▊       | 2/7 [00:01<00:02,  1.86it/s, loss=0.000051]  Training:  29%|██▊       | 2/7 [00:01<00:02,  1.86it/s, loss=0.000054]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.40it/s, loss=0.000054]  Training:  43%|████▎     | 3/7 [00:01<00:01,  2.40it/s, loss=0.000052]  Training:  57%|█████▋    | 4/7 [00:01<00:01,  2.79it/s, loss=0.000052]  Training:  57%|█████▋    | 4/7 [00:02<00:01,  2.79it/s, loss=0.000048]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.05it/s, loss=0.000048]  Training:  71%|███████▏  | 5/7 [00:02<00:00,  3.05it/s, loss=0.000059]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.25it/s, loss=0.000059]  Training:  86%|████████▌ | 6/7 [00:02<00:00,  3.25it/s, loss=0.000056]  Training: 100%|██████████| 7/7 [00:02<00:00,  3.43it/s, loss=0.000056]  Training: 100%|██████████| 7/7 [00:02<00:00,  2.38it/s, loss=0.000056]
+  Train loss: 0.000056
+  Val:   0%|          | 0/2 [00:00<?, ?it/s]  Val:  50%|█████     | 1/2 [00:02<00:02,  2.07s/it]  Val: 100%|██████████| 2/2 [00:02<00:00,  1.18s/it]
+  Val  SRCC: 0.863387  |  PLCC: 0.901321
+  Best val SRCC:  0.865593
+  Best test SRCC: 0.857628  |  PLCC: 0.899391  (epoch 7)
+
+======================================================================
+  FINAL RESULTS — AGIQA-3K  |  5% labels
+======================================================================
+  Checkpoint:   evalmi_baseline_qf_2.pth
+  Regressor:    mlp
+  Train subset: 104 / 2087 (5%)
+  Best epoch:   7
+  Test SRCC:    0.857628
+  Test PLCC:    0.899391
+  Predictions:  /media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/QFormer_IQA_TTA/tta_eval_codes/results/finetune_a3k_evalmi_baseline_qf_2_5pct/a3k_test_predictions.csv
+======================================================================
+[Saved] Summary: /media/parth/021f75bf-bae8-49ef-86a5-28ca19171835/parth/QFormer_IQA_TTA/tta_eval_codes/results/finetune_a3k_evalmi_baseline_qf_2_5pct/summary.csv
+
+[RESULT] dataset=a3k fraction=5% ckpt=evalmi_baseline_qf_2.pth SRCC=0.857628 PLCC=0.899391
