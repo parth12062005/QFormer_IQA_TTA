@@ -55,3 +55,60 @@ Evaluated on a random subset of 1000 images from the QEval test set to assess th
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Zero-Shot Baseline** | - | - | - | 0.3950 | 0.3191 |
 | **SMA (Single-Stage Desc)** | **3000** | **3** | **5** | **0.4120** | **0.3293** |
+
+### AGHIQA Results
+Evaluated on the full AGHIQA dataset (800 images).
+
+| Method | Prototype Density | TTA Steps | Retrieval K | SRCC | PLCC |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Zero-Shot Baseline** | - | - | - | 0.5778 | 0.5592 |
+| **SMA (Best SRCC)** | **5000** | **5** | **5** | **0.5988** | **0.5828** |
+
+---
+
+## Implementation (PyTorch)
+
+```python
+class RetrievalAugmentedTTALoss(DescRegTTALoss):
+    """Semantic Manifold Attraction (SMA) TTA: Pseudo-labeling via Description KNN + Cosine Similarity.
+    
+    L_total = MSE(pred_mm, pseudo_label) + sim_weight * (1.0 - CosSim(mm_embeds, text_feats))
+    """
+    name = "retrieval_augmented"
+
+    def __init__(self, ref_desc_feats=None, ref_gts=None, k=3, mode="l2", tau=10.0, sim_weight=1.0):
+        self.ref_desc_feats = ref_desc_feats
+        self.ref_gts = ref_gts
+        self.k = k
+        self.mode = mode
+        self.tau = tau
+        self.sim_weight = sim_weight
+
+    def __call__(self, ctx):
+        if self.ref_desc_feats is None or "initial_text_cls" not in ctx or "text_cls" not in ctx or "mm_embeds" not in ctx:
+            return torch.tensor(0.0, device=ctx["device"], requires_grad=True)
+
+        initial_text_cls = ctx["initial_text_cls"]
+        if initial_text_cls is None or ctx["text_cls"] is None:
+            return torch.tensor(0.0, device=ctx["device"], requires_grad=True)
+            
+        with torch.no_grad():
+            # 1. K-NN Retrieval from Prototype Gallery
+            initial_text_cls_norm = F.normalize(initial_text_cls, p=2, dim=-1)
+            ref_desc_feats_norm = F.normalize(self.ref_desc_feats, p=2, dim=-1)
+            
+            sims = torch.mm(initial_text_cls_norm, ref_desc_feats_norm.t())
+            _, topk_idx = sims.topk(self.k, dim=1)
+            
+            # 2. Derive Manifold Target (Pseudo-label)
+            pseudo_labels = self.ref_gts[topk_idx].mean(dim=1)
+            
+        # 3. Manifold Attraction Loss
+        pred_loss = _compute_loss(ctx["pred_mm"], pseudo_labels, self.mode, self.tau)
+        
+        # Auxiliary alignment
+        cos_sim = F.cosine_similarity(ctx["mm_embeds"], ctx["text_cls"], dim=-1).mean()
+        sim_loss = 1.0 - cos_sim
+        
+        return pred_loss + self.sim_weight * sim_loss
+```
