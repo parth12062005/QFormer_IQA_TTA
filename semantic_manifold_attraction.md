@@ -1,52 +1,56 @@
-# Semantic Manifold Attraction (SMA-TTA)
+# Test-Time Adaptation (TTA) Method
 
 ## Methodology
 
 ### Overview
-Standard Test-Time Adaptation (TTA) often struggles when updating representations without a reliable reference, potentially causing the features to drift aimlessly. To solve this, we introduce **Semantic Manifold Attraction (SMA)**, a method that leverages a discrete set of known, high-quality representations to "pull" out-of-distribution test samples back onto a well-behaved feature manifold.
+Standard Test-Time Adaptation (TTA) often struggles when updating representations without a reliable reference, potentially causing the features to drift aimlessly. To solve this, we introduce a retrieval-augmented **TTA Method** that leverages a discrete set of known, high-quality representations to "pull" out-of-distribution test samples back onto a well-behaved feature manifold, while maintaining semantic alignment.
 
 ### Process
-1. **Prototype Mining (Discrete Manifold Construction):** 
-   During the pre-training or offline phase, we sample a dense set of discrete data points (e.g., $N \in \{3000, 5000, 7000\}$) from the training set. We extract their multi-modal (MM) and text/description embeddings to form a reference gallery. These discrete points approximate the "ground-truth" representation manifold of image quality.
+1. **Prototype Mining (Discrete Reference Gallery):** 
+   During the pre-training or offline phase, we sample a dense set of discrete data points (e.g., $N \in \{3000, 5000, 7000\}$) from the training set. We extract their text/description embeddings and ground-truth quality scores to form a reference gallery. These discrete points approximate the "ground-truth" representation manifold of image quality.
 
-2. **K-NN Retrieval:** 
-   During test-time inference, for a given unseen image, we extract its initial semantic description features. We use these features to query the discrete reference gallery and retrieve the $K$-Nearest Neighbors (e.g., $K \in \{3, 5, 7\}$). These neighbors represent the closest known valid points on the manifold for this specific image's semantic content.
+2. **K-NN Retrieval & Pseudo-Labeling:** 
+   During test-time inference, for a given unseen image, we extract its initial semantic description features. We use these features to query the discrete reference gallery and retrieve the $K$-Nearest Neighbors (e.g., $K \in \{3, 5, 7\}$). We average the ground-truth scores of these neighbors to create a robust pseudo-label for the test image.
 
-3. **Manifold Attraction (TTA Update):** 
-   We formulate an attractive loss (such as L2) that penalizes the distance between the test image's visual/MM features and the retrieved $K$-NN text prototypes. By backpropagating this loss into the model's un-frozen layers (e.g., LayerNorms or Query Tokens) over a small number of TTA steps (e.g., $S \in \{1, 3, 5, 7\}$), the test image's representation is actively "pulled" toward the local manifold neighborhood.
+3. **Adaptation (TTA Update):** 
+   We formulate an objective function with two components:
+   - **Quality Consistency:** A loss (such as L2) that penalizes the distance between the test image's predicted quality score and the retrieved pseudo-label.
+   - **Semantic Alignment:** A similarity penalty (weighted by `sim_weight`) that maintains the cosine similarity between the multimodal embeddings and the text embeddings, preventing semantic drift during adaptation.
+   
+   By backpropagating this combined loss into the model's un-frozen layers (e.g., LayerNorms or Query Tokens) over a small number of TTA steps (e.g., $S \in \{1, 3, 5, 7\}$), the test image's representation is actively adapted toward a more accurate quality prediction without losing its semantic meaning.
 
 4. **Evaluation:** 
-   Once the representation is successfully attracted to the known manifold, the regressor evaluates the updated features, yielding a final quality score that is significantly more aligned with human perception.
+   Once the representation is successfully adapted, the regressor evaluates the updated features, yielding a final quality score that is significantly more aligned with human perception.
 
 ---
 
 ## Evaluation Results
 
-The proposed SMA method demonstrates consistent and significant improvements across both the AGIQA-3K and A20K datasets. By hyperparameter tuning the prototype density, TTA steps, and retrieval $K$, we observed steady gains in both SRCC and PLCC compared to the zero-shot baseline.
+The proposed TTA method demonstrates consistent and significant improvements across both the AGIQA-3K and A20K datasets. By hyperparameter tuning the prototype density, TTA steps, and retrieval $K$, we observed steady gains in both SRCC and PLCC compared to the zero-shot baseline.
 
 ### AGIQA-3K Results
-The baseline zero-shot model achieves a respectable SRCC, but applying Semantic Manifold Attraction yields up to a **~+0.024** jump in SRCC and **~+0.044** in PLCC.
+The baseline zero-shot model achieves a respectable SRCC, but applying the TTA method yields up to a **~+0.024** jump in SRCC and **~+0.044** in PLCC.
 
 | Method | Prototype Density | TTA Steps | Retrieval K | SRCC | PLCC |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Baseline (Zero-Shot)** | - | - | - | 0.7994 | 0.8036 |
-| SMA (Light) | 3000 | 1 | 5 | 0.8050 | 0.8126 |
-| SMA (Medium) | 5000 | 3 | 5 | 0.8110 | 0.8261 |
-| SMA (Deep) | 3000 | 5 | 5 | 0.8194 | 0.8383 |
-| **SMA (Best SRCC)** | **3000** | **7** | **5** | **0.8235** | **0.8466** |
-| **SMA (Best PLCC)** | **7000** | **7** | **7** | **0.8226** | **0.8479** |
+| TTA (Light) | 3000 | 1 | 5 | 0.8050 | 0.8126 |
+| TTA (Medium) | 5000 | 3 | 5 | 0.8110 | 0.8261 |
+| TTA (Deep) | 3000 | 5 | 5 | 0.8194 | 0.8383 |
+| **TTA (Best SRCC)** | **3000** | **7** | **5** | **0.8235** | **0.8466** |
+| **TTA (Best PLCC)** | **7000** | **7** | **7** | **0.8226** | **0.8479** |
 
 ### A20K Results
-For the larger and more diverse A20K dataset, Semantic Manifold Attraction reliably improves the PLCC correlation by over **+0.02** points while maintaining or improving SRCC.
+For the larger and more diverse A20K dataset, the TTA method reliably improves the PLCC correlation by over **+0.02** points while maintaining or improving SRCC.
 
 | Method | Prototype Density | TTA Steps | Retrieval K | SRCC | PLCC |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Baseline (Zero-Shot)** | - | - | - | 0.8025 | 0.7823 |
-| SMA (Light) | 5000 | 1 | 5 | 0.8047 | 0.7876 |
-| SMA (Medium) | 3000 | 3 | 5 | 0.8076 | 0.7962 |
-| SMA (Deep) | 5000 | 5 | 5 | 0.8075 | 0.8011 |
-| **SMA (Best SRCC)** | **5000** | **5** | **7** | **0.8083** | **0.8016** |
-| **SMA (Best PLCC)** | **3000** | **7** | **7** | **0.8068** | **0.8055** |
+| TTA (Light) | 5000 | 1 | 5 | 0.8047 | 0.7876 |
+| TTA (Medium) | 3000 | 3 | 5 | 0.8076 | 0.7962 |
+| TTA (Deep) | 5000 | 5 | 5 | 0.8075 | 0.8011 |
+| **TTA (Best SRCC)** | **5000** | **5** | **7** | **0.8083** | **0.8016** |
+| **TTA (Best PLCC)** | **3000** | **7** | **7** | **0.8068** | **0.8055** |
 
 ### QEval Results
 Evaluated on a random subset of 1000 images from the QEval test set to assess the impact of single-stage description-only Test-Time Adaptation.
@@ -54,7 +58,7 @@ Evaluated on a random subset of 1000 images from the QEval test set to assess th
 | Method | Prototype Density | TTA Steps | Retrieval K | SRCC | PLCC |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Zero-Shot Baseline** | - | - | - | 0.3950 | 0.3191 |
-| **SMA (Single-Stage Desc)** | **3000** | **3** | **5** | **0.4120** | **0.3293** |
+| **TTA (Single-Stage Desc)** | **3000** | **3** | **5** | **0.4120** | **0.3293** |
 
 ### AGHIQA Results
 Evaluated on the full AGHIQA dataset (800 images).
@@ -62,7 +66,7 @@ Evaluated on the full AGHIQA dataset (800 images).
 | Method | Prototype Density | TTA Steps | Retrieval K | SRCC | PLCC |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Zero-Shot Baseline** | - | - | - | 0.5778 | 0.5592 |
-| **SMA (Best SRCC)** | **5000** | **5** | **5** | **0.5988** | **0.5828** |
+| **TTA (Best SRCC)** | **5000** | **5** | **5** | **0.5988** | **0.5828** |
 
 ---
 
@@ -70,9 +74,9 @@ Evaluated on the full AGHIQA dataset (800 images).
 
 ```python
 class RetrievalAugmentedTTALoss(DescRegTTALoss):
-    """Semantic Manifold Attraction (SMA) TTA: Pseudo-labeling via Description KNN + Cosine Similarity.
+    """Retrieval-Augmented TTA: Pseudo-labeling via Description KNN + Cosine Similarity Alignment.
     
-    L_total = MSE(pred_mm, pseudo_label) + sim_weight * (1.0 - CosSim(mm_embeds, text_feats))
+    L_total = MSE(pred_mm, pseudo_label) + sim_weight * (1.0 - CosSim(mm_embeds, text_cls))
     """
     name = "retrieval_augmented"
 
@@ -103,10 +107,10 @@ class RetrievalAugmentedTTALoss(DescRegTTALoss):
             # 2. Derive Manifold Target (Pseudo-label)
             pseudo_labels = self.ref_gts[topk_idx].mean(dim=1)
             
-        # 3. Manifold Attraction Loss
+        # 3. Quality Consistency Loss
         pred_loss = _compute_loss(ctx["pred_mm"], pseudo_labels, self.mode, self.tau)
         
-        # Auxiliary alignment
+        # 4. Auxiliary Semantic Alignment
         cos_sim = F.cosine_similarity(ctx["mm_embeds"], ctx["text_cls"], dim=-1).mean()
         sim_loss = 1.0 - cos_sim
         
